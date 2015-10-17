@@ -91,9 +91,14 @@ void sr_handlepacket(struct sr_instance* sr,
   uint16_t converted_ether_type_val = ntohs(ethernet_header->ether_type);
 
   if(converted_ether_type_val == ethertype_arp){
-    printf("Received ARP packet.");
-  } else{
-    printf("Received IP Packet");
+    printf("Received ARP packet. \n");
+    /*sr_arp_hdr_t *arp_header = */
+    print_hdrs(packet, len);
+
+
+
+  } else if (converted_ether_type_val == ethertype_ip){
+    printf("Received IP Packet. \n");
   }
 
 
