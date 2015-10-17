@@ -96,16 +96,15 @@ void sr_handlepacket(struct sr_instance* sr,
     sr_arp_hdr_t *arp_header =  (sr_arp_hdr_t *)(packet);
     
     uint16_t converted_arp_op_val = ntohs(arp_header->ar_op);
-    switch(converted_arp_op_val){
-      arp_op_request:
+    
+    if(converted_arp_op_val == arp_op_request){
         printf("Received ARP Request.\n");
-        break;
+        
+    } else if(converted_arp_op_val == arp_op_reply){
 
-      arp_op_reply:
-        printf("Received ARP Reply.\n");
-        break;
-
-      default:
+      printf("Received ARP Reply.\n");
+        
+    } else{
         printf("No match of arp op code.\n");
     }
 
