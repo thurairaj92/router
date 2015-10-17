@@ -126,7 +126,7 @@ void sr_handlepacket(struct sr_instance* sr,
           printf("ARP REPLY Created: \n");
           print_hdrs(reply_packet, reply_len);
 
-          if(sr_send_packet(sr, reply_packet, len, target_ip_interface->name) == 0){
+          if((sr_send_packet(sr, reply_packet, reply_len, target_ip_interface->name)) == 0){
             printf("Packet Sent successflly. \n");
           } else {
             printf("Failed to send the packet.\n");
