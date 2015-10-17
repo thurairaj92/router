@@ -95,8 +95,8 @@ void sr_handlepacket(struct sr_instance* sr,
     printf("Received ARP packet. \n");
     sr_arp_hdr_t *arp_header =  (sr_arp_hdr_t *)(packet);
     
-    uint16_t converted_arp_op_val = ntohs(arp_header->ar_op);
-    
+    unsigned short converted_arp_op_val = ntohs(arp_header->ar_op);
+
     if(converted_arp_op_val == arp_op_request){
         printf("Received ARP Request.\n");
         
