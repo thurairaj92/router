@@ -132,6 +132,8 @@ void sr_handlepacket(struct sr_instance* sr,
             printf("Failed to send the packet.\n");
           }
 
+          free(reply_packet);
+
         } else{
           printf("Target IP not for Router.\n");
         }
