@@ -95,7 +95,7 @@ void sr_handlepacket(struct sr_instance* sr,
     printf("Received ARP packet. \n");
     sr_arp_hdr_t *arp_header =  (sr_arp_hdr_t *)(packet);
     
-    print_hdrs(packet);
+    print_hdrs(packet, len);
 
     switch(ntohs(arp_header->ar_op)){
       case arp_op_request:
