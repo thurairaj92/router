@@ -52,7 +52,43 @@ struct sr_if* sr_get_interface(struct sr_instance* sr, const char* name)
     }
 
     return 0;
-} /* -- sr_get_interface -- */
+}
+
+
+
+/*--------------------------------------------------------------------- 
+ * Method: sr_get_ip_interface
+ * Scope: Global
+ *
+ * Given an interface name return the interface record or 0 if it doesn't
+ * exist.
+ *
+ *---------------------------------------------------------------------*/
+
+struct sr_if* sr_get_ip_interface(struct sr_instance* sr, uint32_t ar_tip)
+{
+    struct sr_if* if_walker = 0;
+
+    /* -- REQUIRES -- */
+    assert(sr);
+
+    if_walker = sr->if_list;
+
+    while(if_walker)
+    {
+       if(if_walker->ip == ar_tip)
+        { return if_walker; }
+        if_walker = if_walker->next;
+    }
+
+    return 0;
+}
+
+
+
+
+
+ /* -- sr_get_interface -- */
 
 /*--------------------------------------------------------------------- 
  * Method: sr_add_interface(..)

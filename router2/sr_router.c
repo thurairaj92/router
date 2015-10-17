@@ -13,6 +13,8 @@
 
 #include <stdio.h>
 #include <assert.h>
+#include <stdlib.h>
+#include <string.h>
 
 
 #include "sr_if.h"
@@ -21,6 +23,13 @@
 #include "sr_protocol.h"
 #include "sr_arpcache.h"
 #include "sr_utils.h"
+
+
+ #define IP_ADDR_LEN 4
+
+
+ void create_arp_header(uint8_t *packet, uint8_t *in_sha, uint8_t *out_sha, uint32_t in_ip, uint32_t out_ip, uint16_t op_code);
+ void create_ethernet_header(uint8_t *packet, uint8_t *out_host, uint8_t *in_host, uint16_t eth_type);
 
 /*---------------------------------------------------------------------
  * Method: sr_init(void)
@@ -101,6 +110,26 @@ void sr_handlepacket(struct sr_instance* sr,
     switch(converted_arp_op_val){
       case arp_op_request:
         printf("Received ARP Request.\n");
+
+        /*Find out if target Ip addr is one of our router's addresses. */
+        struct sr_if* target_ip_interface = sr_get_ip_interface(sr, arp_header->ar_tip);
+        if(target_ip_interface != 0){
+          printf("Target IP of ARP request in the router. \n");
+        
+          /*Create Packet with arp and ethernet header. */
+          unsigned int reply_len = sizeof(sr_ethernet_hdr_t) + sizeof(sr_arp_hdr_t);
+          uint8_t *reply_packet = malloc(reply_len);
+          create_arp_header(reply_packet, target_ip_interface->addr, arp_header->ar_sha, target_ip_interface->ip, arp_header->ar_sip, arp_op_reply);
+          create_ethernet_header(reply_packet, ethernet_header->ether_shost,  target_ip_interface->addr,  ethertype_arp);
+
+          printf("ARP REPLY Created: \n");
+          print_hdrs(reply_packet, reply_len);
+
+        } else{
+          printf("Target IP not for Router.\n");
+        }
+
+
         break;
 
       case arp_op_reply:
@@ -117,10 +146,29 @@ void sr_handlepacket(struct sr_instance* sr,
     printf("Received IP Packet. \n");
   }
 
-
-
-
-
-
 }/* end sr_ForwardPacket */
+
+ void create_arp_header(uint8_t *packet, uint8_t *in_sha, uint8_t *out_sha, uint32_t in_ip, uint32_t out_ip, uint16_t op_code){
+    sr_arp_hdr_t *reply_arp_header = (sr_arp_hdr_t *) (packet + sizeof(sr_ethernet_hdr_t));
+    memcpy(reply_arp_header->ar_sha, in_sha, ETHER_ADDR_LEN);
+    reply_arp_header->ar_sip = in_ip;
+    memcpy(reply_arp_header->ar_tha, out_sha, ETHER_ADDR_LEN);
+    reply_arp_header->ar_tip = out_ip;
+    reply_arp_header->ar_hrd = htons(arp_hrd_ethernet);
+    reply_arp_header->ar_pro = htons(ethertype_ip);
+    reply_arp_header->ar_hln = ETHER_ADDR_LEN;
+    reply_arp_header->ar_pln = IP_ADDR_LEN;
+    reply_arp_header->ar_op = htons(op_code);
+
+ } 
+
+ void create_ethernet_header(uint8_t *packet, uint8_t *out_host, uint8_t *in_host, uint16_t eth_type){
+    sr_ethernet_hdr_t *reply_ethernet_header = (sr_ethernet_hdr_t *) packet;
+
+    reply_ethernet_header->ether_type = htons(eth_type);
+    memcpy(reply_ethernet_header->ether_dhost, out_host, sizeof(uint8_t) * ETHER_ADDR_LEN);
+    memcpy(reply_ethernet_header->ether_shost, in_host, sizeof(uint8_t) * ETHER_ADDR_LEN);
+       
+    
+ }
 
