@@ -79,6 +79,27 @@ void sr_handlepacket(struct sr_instance* sr,
   printf("*** -> Received packet of length %d \n",len);
 
   /* fill in code here */
+  struct sr_if* ethernet_interface = sr_get_interface(sr, interface);
+
+  /* Fetch Interface from instance of sr for further processing. */
+  if(!ethernet_interface){
+    printf("Received Invalid Packet Ethernet Interface. Error");
+  }
+
+  sr_ethernet_hdr_t *ethernet_header = (sr_ethernet_hdr_t *) packet;
+
+  uint16_t converted_ether_type_val = ntohs(ethernet_header->ether_type);
+
+  if(converted_ether_type_val == ethertype_arp){
+    printf("Received ARP packet.");
+  } else{
+    printf("Received IP Packet");
+  }
+
+
+
+
+
 
 }/* end sr_ForwardPacket */
 
