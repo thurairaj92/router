@@ -88,12 +88,25 @@ void sr_handlepacket(struct sr_instance* sr,
 
   sr_ethernet_hdr_t *ethernet_header = (sr_ethernet_hdr_t *) packet;
 
+  /* convert network byte order to host byte order. */
   uint16_t converted_ether_type_val = ntohs(ethernet_header->ether_type);
 
   if(converted_ether_type_val == ethertype_arp){
     printf("Received ARP packet. \n");
     sr_arp_hdr_t *arp_header =  (sr_arp_hdr_t *)(packet);
-    print_hdr_arp(arp_header);
+    
+    switch(arp_header->ar_op){
+      arp_op_request:
+        printf("Received ARP Request.\n");
+        break;
+
+      arp_op_reply:
+        printf("Received ARP Reply.\n");
+        break; 
+
+      default:
+        printf("No match of arp op code.\n");
+    }
 
 
 
