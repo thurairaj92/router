@@ -92,8 +92,8 @@ void sr_handlepacket(struct sr_instance* sr,
 
   if(converted_ether_type_val == ethertype_arp){
     printf("Received ARP packet. \n");
-    /*sr_arp_hdr_t *arp_header = */
-    print_hdrs(packet, len);
+    sr_arp_hdr_t *arp_header =  (sr_arp_hdr_t *)(packet);
+    print_hdr_arp(arp_header);
 
 
 
