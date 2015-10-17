@@ -122,8 +122,15 @@ void sr_handlepacket(struct sr_instance* sr,
           create_arp_header(reply_packet, target_ip_interface->addr, arp_header->ar_sha, target_ip_interface->ip, arp_header->ar_sip, arp_op_reply);
           create_ethernet_header(reply_packet, ethernet_header->ether_shost,  target_ip_interface->addr,  ethertype_arp);
 
+          /* DEBUG FUNCTIONS remove Later. */
           printf("ARP REPLY Created: \n");
           print_hdrs(reply_packet, reply_len);
+
+          if(sr_send_packet(sr, reply_packet, len, target_ip_interface->name) == 0){
+            printf("Packet Sent successflly. \n");
+          } else {
+            printf("Failed to send the packet.\n");
+          }
 
         } else{
           printf("Target IP not for Router.\n");
