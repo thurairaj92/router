@@ -103,8 +103,6 @@ void sr_handlepacket(struct sr_instance* sr,
   if(converted_ether_type_val == ethertype_arp){
     printf("Received ARP packet. \n");
     sr_arp_hdr_t *arp_header =  (sr_arp_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t));
-    
-    print_hdrs(packet, len);
 
     unsigned short converted_arp_op_val = ntohs(arp_header->ar_op);
     switch(converted_arp_op_val){
@@ -122,9 +120,9 @@ void sr_handlepacket(struct sr_instance* sr,
           create_arp_header(reply_packet, target_ip_interface->addr, arp_header->ar_sha, target_ip_interface->ip, arp_header->ar_sip, arp_op_reply);
           create_ethernet_header(reply_packet, ethernet_header->ether_shost,  target_ip_interface->addr,  ethertype_arp);
 
-          /* DEBUG FUNCTIONS remove Later. */
+          /* DEBUG FUNCTIONS remove Later. 
           printf("ARP REPLY Created: \n");
-          print_hdrs(reply_packet, reply_len);
+          print_hdrs(reply_packet, reply_len);*/
 
           if((sr_send_packet(sr, reply_packet, reply_len, target_ip_interface->name)) == 0){
             printf("Packet Sent successflly. \n");
@@ -143,6 +141,32 @@ void sr_handlepacket(struct sr_instance* sr,
 
       case arp_op_reply:
         printf("Received ARP Reply.\n");
+
+        struct sr_arpreq *request =  sr_arpcache_insert(&sr->cache,
+                                     arp_header->ar_sha,
+                                    arp_header->ar_sip);
+
+         if(request != NULL){
+            struct sr_packet *packet_head = request->packets;
+            while(packet_head != NULL){
+              if((sr_send_packet(sr, packet_head->buf, packet_head->len, packet_head->iface)) == 0){
+                printf("Packet Sent successflly. \n");
+              } else {
+                printf("Failed to send the packet.\n");
+              }
+
+              if(packet_head->next){
+                packet_head = packet_head->next;
+              } else{
+                packet_head = NULL;
+              }
+
+            }
+
+            sr_arpreq_destroy(&sr->cache, request);
+
+         }
+
         break;
 
       default:
