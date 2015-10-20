@@ -176,3 +176,32 @@ void sr_print_routing_entry(struct sr_rt* entry)
     printf("%s\n",entry->interface);
 
 } /* -- sr_print_routing_entry -- */
+
+
+/*--------------------------------------------------------------------- 
+ * Method: sr_get_routing_entry
+ * Scope: Global
+ *
+ * Given an interface name return the interface record or 0 if it doesn't
+ * exist.
+ *
+ *---------------------------------------------------------------------*/
+
+struct sr_rt* sr_get_routing_entry(struct sr_instance* sr, uint32_t ar_tip)
+{
+    struct sr_rt* rt_walker = 0;
+
+    /* -- REQUIRES -- */
+    assert(sr);
+
+    rt_walker = sr->routing_table;
+
+    while(rt_walker)
+    {
+       if(rt_walker->dest.s_addr == ar_tip)
+        { return rt_walker; }
+        rt_walker = rt_walker->next;
+    }
+
+    return 0;
+}

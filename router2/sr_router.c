@@ -189,6 +189,9 @@ void sr_handlepacket(struct sr_instance* sr,
 		sr_ip_hdr_t *ip_header =  (sr_ip_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t));
 		struct sr_if* target_ip_interface = sr_get_ip_interface(sr, ip_header->ip_dst);
 
+    struct sr_rt* target_machine_ip = sr_get_routing_entry(sr, ip_header->ip_dst);
+
+
 		/*checksum*/
 		uint16_t ip_cksum = ip_header->ip_sum;
 		ip_header->ip_sum = 0;
@@ -224,7 +227,7 @@ void sr_handlepacket(struct sr_instance* sr,
 			return;
 		}
 	   	/*Packet for my IP*/
-		if(target_ip_interface != 0){
+		if(target_machine_ip != 0){
 			printf("Target IP Packet for Router.\n");
 			/*If ICMP*/
 			if(ip_header->ip_p == 1){
