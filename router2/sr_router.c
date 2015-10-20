@@ -313,7 +313,7 @@ void create_ip_header(uint8_t *packet, uint16_t ip_len, uint8_t ip_ttl, uint8_t 
 	reply_ip_header->ip_hl = sizeof(sr_ip_hdr_t) / 32;
 	reply_ip_header->ip_v = 4;
 	reply_ip_header->ip_tos = 0; 
-	reply_ip_header->ip_len = sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_t3_hdr_t);
+	reply_ip_header->ip_len = ip_len;
 
 	reply_ip_header->ip_id  = 0; /* TODO */
 	reply_ip_header->ip_off = 0;
