@@ -321,14 +321,14 @@ void create_ip_header(uint8_t *packet, uint16_t ip_len, uint8_t ip_ttl, uint8_t 
 	reply_ip_header->ip_len = htons(ip_len);
 
 	reply_ip_header->ip_id  = htons(0); /* TODO */
-	reply_ip_header->ip_off = 0;
+	reply_ip_header->ip_off = htons(0);
 
 	reply_ip_header->ip_ttl = ip_ttl;
 	reply_ip_header->ip_p = ip_p;
 	reply_ip_header->ip_src = ip_src; 
 	reply_ip_header->ip_dst = ip_dst;
 	/*TODO flags*/
-	reply_ip_header->ip_sum = cksum((void *) reply_ip_header, reply_ip_header->ip_hl * 4);
+	reply_ip_header->ip_sum = htons(cksum((void *) reply_ip_header, reply_ip_header->ip_hl * 4));
 
 }
 
