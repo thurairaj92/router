@@ -114,6 +114,7 @@ void sr_handlepacket(struct sr_instance* sr,
 
         /*Find out if target Ip addr is one of our router's addresses. */
         struct sr_if* target_ip_interface = sr_get_ip_interface(sr, arp_header->ar_tip);
+        print_hdrs(packet, len);
         if(target_ip_interface != 0){
           printf("Target IP of ARP request in the router. \n");
         
@@ -153,9 +154,9 @@ void sr_handlepacket(struct sr_instance* sr,
             struct sr_packet *packet_head = request->packets;
             while(packet_head != NULL){
               if((sr_send_packet(sr, packet_head->buf, packet_head->len, packet_head->iface)) == 0){
-                printf("Packet Sent successflly. \n");
+                printf("ARP Reply Sent successflly. \n");
               } else {
-                printf("Failed to send the packet.\n");
+                printf("Failed to send ARP Reply packet.\n");
               }
 
               if(packet_head->next){
