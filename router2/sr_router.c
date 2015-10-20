@@ -231,9 +231,14 @@ void sr_handlepacket(struct sr_instance* sr,
 			printf("Target IP Packet for Router.\n");
 			/*If ICMP*/
 			if(ip_header->ip_p == 1){
-				uint8_t *icmp =  (uint8_t *)(packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
-				printf("\tICMP Type : %" PRIu8 "\n", *icmp);
-				switch(*icmp){
+
+        sr_icmp_hdr_t *icmp_header = (sr_icmp_hdr_t *)(((uint8_t *)ip_header) + ip_header->ip_hl * 4);
+        uint16_t icmp_len = ntohs(ip_header->ip_len) - ip_header->ip_hl * 4;
+
+
+			/*	uint8_t *icmp =  (uint8_t *)(packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));*/
+				printf("\tICMP Type : %" PRIu8 "\n", icmp_header->icmp_type);
+				switch(icmp_header->icmp_type){
 					case 1:
 						break;
 					case 3:
@@ -243,11 +248,28 @@ void sr_handlepacket(struct sr_instance* sr,
 							/*echo request*/
 							printf("0. \n");
 							uint16_t ip_len = sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_hdr_t);
-							unsigned int reply_icmp_len = sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_hdr_t);
+							unsigned int reply_icmp_len = sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) + icmp_len;
 							printf("1. \n");
 							uint8_t *reply_icmp = malloc(reply_icmp_len);
 							
-							create_icmp_header(reply_icmp, 0, 0);
+							/*create_icmp_header(reply_icmp, 0, 0);*/
+              sr_icmp_hdr_t *out_icmp =
+                                (sr_icmp_hdr_t *)(reply_icmp + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
+
+                       
+              memcpy(out_icmp, icmp_header, icmp_len);
+
+            
+              out_icmp->icmp_type = 0;
+
+              out_icmp->icmp_sum = 0;
+
+              out_icmp->icmp_sum = htons(cksum((void *) reply_icmp, icmp_len));
+
+
+
+
+
 							printf("2. \n");
 							create_ip_header(reply_icmp, ip_len, INITIAL_TTL, ip_protocol_icmp, ip_header->ip_dst, ip_header->ip_src);
 							printf("3. \n");
