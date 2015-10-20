@@ -338,7 +338,7 @@ void create_icmp_header(uint8_t *packet, uint8_t icmp_type, uint8_t icmp_code){
   	reply_icmp->icmp_code = icmp_code;
   	reply_icmp->icmp_sum = 0;
 
-  	reply_icmp->icmp_sum = cksum((void *) reply_icmp, sizeof(reply_icmp));
+  	reply_icmp->icmp_sum = htons(cksum((void *) reply_icmp, sizeof(reply_icmp)));
 }
 
 
