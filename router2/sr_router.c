@@ -90,7 +90,7 @@ void sr_handlepacket(struct sr_instance* sr,
 
   printf("*** -> Received packet of length %d \n",len);
 
-  sr_print_if_list(sr);
+  sr_print_routing_table(sr);
 
   /* fill in code here */
   struct sr_if* ethernet_interface = sr_get_interface(sr, interface);
