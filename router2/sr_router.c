@@ -248,7 +248,7 @@ void sr_handlepacket(struct sr_instance* sr,
 						{
 							/*echo request*/
 							printf("0. \n");
-							uint16_t ip_len = sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_hdr_t);
+							uint16_t ip_len = sizeof(sr_ip_hdr_t) + icmp_len;
 							unsigned int reply_icmp_len = sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) + icmp_len;
 							printf("1. \n");
 							uint8_t *reply_icmp = malloc(reply_icmp_len);
