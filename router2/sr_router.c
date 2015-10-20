@@ -189,7 +189,7 @@ void sr_handlepacket(struct sr_instance* sr,
 		sr_ip_hdr_t *ip_header =  (sr_ip_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t));
 		struct sr_if* target_ip_interface = sr_get_ip_interface(sr, ip_header->ip_dst);
 
-    struct sr_rt* target_machine_ip = sr_get_routing_entry(sr, ip_header->ip_dst);
+    	struct sr_rt* target_machine_ip = sr_get_routing_entry(sr, ip_header->ip_dst);
 
 
 		/*checksum*/
@@ -217,7 +217,7 @@ void sr_handlepacket(struct sr_instance* sr,
 			
 			create_icmp_header(reply_icmp, 11, 0);
 			create_ip_header(reply_icmp, ip_len, INITIAL_TTL, ip_protocol_icmp, target_ip_interface->ip, ip_header->ip_src);
-			create_ethernet_header(reply_icmp, ethernet_header->ether_shost,  target_ip_interface->addr,  ethertype_arp);
+			create_ethernet_header(reply_icmp, ethernet_header->ether_shost,  ethernet_header->ether_dhost,  ethertype_arp);
 
 			if((sr_send_packet(sr, reply_icmp, reply_icmp_len, target_ip_interface->name)) == 0){
 				printf("Packet Sent successflly. \n");
@@ -241,17 +241,22 @@ void sr_handlepacket(struct sr_instance* sr,
 					case 8:
 						{
 							/*echo request*/
+							printf("0. \n");
 							uint16_t ip_len = sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_hdr_t);
-							unsigned int reply_icmp_len = sizeof(sr_ethernet_hdr_t) + ip_len;
-							
+							unsigned int reply_icmp_len = sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_hdr_t);
+							printf("1. \n");
 							uint8_t *reply_icmp = malloc(reply_icmp_len);
 							
 							create_icmp_header(reply_icmp, 0, 0);
-							create_ip_header(reply_icmp, ip_len, INITIAL_TTL, ip_protocol_icmp, target_ip_interface->ip, ip_header->ip_src);
-							create_ethernet_header(reply_icmp, ethernet_header->ether_shost,  target_ip_interface->addr,  ethertype_ip);
+							printf("2. \n");
+							create_ip_header(reply_icmp, ip_len, INITIAL_TTL, ip_protocol_icmp, ip_header->ip_dst, ip_header->ip_src);
+							printf("3. \n");
+							create_ethernet_header(reply_icmp, ethernet_header->ether_shost,  ethernet_header->ether_dhost,  ethertype_ip);
+							print_hdrs(reply_icmp, reply_icmp_len);
 
-							if((sr_send_packet(sr, reply_icmp, reply_icmp_len, target_ip_interface->name)) == 0){
-								printf("Packet Sent successflly. \n");
+
+							if((sr_send_packet(sr, reply_icmp, reply_icmp_len, ethernet_interface->name)) == 0){
+								printf("ICMP Packet Sent successflly. \n");
 							} else {
 								printf("Failed to send the packet.\n");
 							}
@@ -310,12 +315,12 @@ void sr_handlepacket(struct sr_instance* sr,
 
 void create_ip_header(uint8_t *packet, uint16_t ip_len, uint8_t ip_ttl, uint8_t ip_p, uint32_t ip_src, uint32_t ip_dst){
 	sr_ip_hdr_t *reply_ip_header = (sr_ip_hdr_t *) (packet + sizeof(sr_ethernet_hdr_t));
-	reply_ip_header->ip_hl = sizeof(sr_ip_hdr_t) / 32;
+	reply_ip_header->ip_hl = sizeof(sr_ip_hdr_t) / 4;
 	reply_ip_header->ip_v = 4;
 	reply_ip_header->ip_tos = 0; 
-	reply_ip_header->ip_len = ip_len;
+	reply_ip_header->ip_len = htons(ip_len);
 
-	reply_ip_header->ip_id  = 0; /* TODO */
+	reply_ip_header->ip_id  = htons(0); /* TODO */
 	reply_ip_header->ip_off = 0;
 
 	reply_ip_header->ip_ttl = ip_ttl;
