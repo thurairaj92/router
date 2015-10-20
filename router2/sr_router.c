@@ -227,7 +227,8 @@ void sr_handlepacket(struct sr_instance* sr,
 			return;
 		}
 	   	/*Packet for my IP*/
-		if(target_machine_ip != 0){
+    uint32_t dst_ip = ip_header->ip_dst;
+		 if(sr_get_ip_interface(sr, dst_ip) != 0){
 			printf("Target IP Packet for Router.\n");
 			/*If ICMP*/
 			if(ip_header->ip_p == 1){
