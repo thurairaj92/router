@@ -265,7 +265,7 @@ void sr_handlepacket(struct sr_instance* sr,
 
               out_icmp->icmp_sum = 0;
 
-              out_icmp->icmp_sum = htons(cksum((void *) reply_icmp, icmp_len));
+              out_icmp->icmp_sum = cksum((void *) reply_icmp, icmp_len);
 
 
 
@@ -278,7 +278,7 @@ void sr_handlepacket(struct sr_instance* sr,
 							print_hdrs(reply_icmp, reply_icmp_len);
 
 
-							if((sr_send_packet(sr, reply_icmp, reply_icmp_len, ethernet_interface->name)) == 0){
+							if((sr_send_packet(sr, reply_icmp, reply_icmp_len, interface)) == 0){
 								printf("ICMP Packet Sent successflly. \n");
 							} else {
 								printf("Failed to send the packet.\n");
@@ -351,7 +351,7 @@ void create_ip_header(uint8_t *packet, uint16_t ip_len, uint8_t ip_ttl, uint8_t 
 	reply_ip_header->ip_src = ip_src; 
 	reply_ip_header->ip_dst = ip_dst;
 	/*TODO flags*/
-	reply_ip_header->ip_sum = htons(cksum((void *) reply_ip_header, reply_ip_header->ip_hl * 4));
+	reply_ip_header->ip_sum = cksum((void *) reply_ip_header, reply_ip_header->ip_hl * 4);
 
 }
 
