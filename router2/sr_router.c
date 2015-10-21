@@ -156,7 +156,7 @@ void sr_handlepacket(struct sr_instance* sr,
          if(request != NULL){
             struct sr_packet *packet_head = request->packets;
             while(packet_head != NULL){
-              sr_ip_hdr_t *ip_header = packet_head->buf + sizeof(sr_ethernet_hdr_t);
+              sr_ip_hdr_t *ip_header = (sr_ip_hdr_t *) (packet_head->buf + sizeof(sr_ethernet_hdr_t));
 
               ip_header->ip_ttl--;
               int new_len = sizeof(sr_ethernet_hdr_t) + ntohs(ip_header->ip_len);
@@ -458,7 +458,7 @@ void handle_arpreq(struct sr_instance *sr, struct sr_arpreq *req){
                 struct sr_rt* target_machine_ip = sr_get_routing_entry(sr, req->ip);
                 struct sr_if* next_hop_interface = sr_get_interface(sr, target_machine_ip->interface);
 
-                send_arp_request(sr, target_machine_ip,next_hop_interface);
+                send_arp_request(sr,target_machine_ip,next_hop_interface);
                 req->sent = now;
                 req->times_sent++;
             }
