@@ -311,6 +311,12 @@ void sr_handlepacket(struct sr_instance* sr,
 		else{
       printf("Target IP not for Router.\n");
       struct sr_rt* target_machine_ip = sr_get_routing_entry(sr, ip_header->ip_dst);
+
+      if(target_machine_ip != NULL){
+        printf("IP not handled by router as it does not exist in router. \n");
+        return;
+      }
+
       struct sr_if* next_hop_interface = sr_get_interface(sr, target_machine_ip->interface);
 			
       struct sr_arpentry *arp_entry = sr_arpcache_lookup(&sr->cache, ip_header->ip_dst);
