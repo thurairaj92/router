@@ -156,12 +156,27 @@ void sr_handlepacket(struct sr_instance* sr,
          if(request != NULL){
             struct sr_packet *packet_head = request->packets;
             while(packet_head != NULL){
-              if((sr_send_packet(sr, packet_head->buf, packet_head->len, packet_head->iface)) == 0){
-                printf("Sent ARP Req packet to dest. \n");
+              sr_ip_hdr_t *ip_header = packet_head->buf + sizeof(sr_ethernet_hdr_t);
+
+              ip_header->ip_ttl--;
+              int new_len = sizeof(sr_ethernet_hdr_t) + ntohs(ip_header->ip_len);
+              uint8_t *packet_new = malloc(new_len);
+
+              memcpy(packet_new + sizeof(sr_ethernet_hdr_t), ip_header, ntohs(ip_header->ip_len));
+              ip_header->ip_sum = 0;
+
+              ip_header->ip_sum = cksum((void *) ip_header, ip_header->ip_hl * 4);
+
+              create_ethernet_header(packet_new, arp_header->ar_sha, arp_header->ar_tha, ethertype_ip);
+
+
+              if((sr_send_packet(sr, packet_new, packet_head->len, interface)) == 0){
+                printf("Broadcasted packet from arp Req upon receivng arp reply. \n");
               } else {
-                printf("Failed to send ARP Req packet to dest.\n");
+                printf("Failed to broadcast ARP Req packet upon receiving arp reply. \n");
               }
 
+              free(packet_new);
               if(packet_head->next){
                 packet_head = packet_head->next;
               } else{
