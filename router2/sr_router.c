@@ -33,6 +33,7 @@ void create_arp_header(uint8_t *packet, uint8_t *in_sha, uint8_t *out_sha, uint3
 void create_ethernet_header(uint8_t *packet, uint8_t *out_host, uint8_t *in_host, uint16_t eth_type);
 void create_ip_header(uint8_t *packet, uint16_t ip_len, uint8_t ip_ttl, uint8_t ip_p, uint32_t ip_src,uint32_t ip_dst);
 void create_icmp_header(uint8_t *packet, uint8_t icmp_type, uint8_t icmp_code);
+void send_arp_request(struct sr_instance *sr, struct sr_rt *hop_entry, struct sr_if *out_interface);
 
 /*---------------------------------------------------------------------
  * Method: sr_init(void)
@@ -90,7 +91,7 @@ void sr_handlepacket(struct sr_instance* sr,
 
   printf("*** -> Received packet of length %d \n",len);
 
-  sr_print_routing_table(sr);
+  
 
   /* fill in code here */
   struct sr_if* ethernet_interface = sr_get_interface(sr, interface);
@@ -156,9 +157,9 @@ void sr_handlepacket(struct sr_instance* sr,
             struct sr_packet *packet_head = request->packets;
             while(packet_head != NULL){
               if((sr_send_packet(sr, packet_head->buf, packet_head->len, packet_head->iface)) == 0){
-                printf("ARP Reply Sent successflly. \n");
+                printf("Sent ARP Req packet to dest. \n");
               } else {
-                printf("Failed to send ARP Reply packet.\n");
+                printf("Failed to send ARP Req packet to dest.\n");
               }
 
               if(packet_head->next){
@@ -183,13 +184,13 @@ void sr_handlepacket(struct sr_instance* sr,
 
   }else if (converted_ether_type_val == ethertype_ip){
 		printf("Received IP Packet. \n");
-		print_hdrs(packet, len);
+	
 
 		/*Get IP header*/
 		sr_ip_hdr_t *ip_header =  (sr_ip_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t));
 		struct sr_if* target_ip_interface = sr_get_ip_interface(sr, ip_header->ip_dst);
 
-    	struct sr_rt* target_machine_ip = sr_get_routing_entry(sr, ip_header->ip_dst);
+    	
 
 
 		/*checksum*/
@@ -256,10 +257,8 @@ void sr_handlepacket(struct sr_instance* sr,
 							/*create_icmp_header(reply_icmp, 0, 0);*/
               sr_icmp_hdr_t *out_icmp =
                                 (sr_icmp_hdr_t *)(reply_icmp + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
-
-                       
+                      
               memcpy(out_icmp, icmp_header, icmp_len);
-
             
               out_icmp->icmp_type = 0;
 
@@ -267,15 +266,11 @@ void sr_handlepacket(struct sr_instance* sr,
 
               out_icmp->icmp_sum = cksum((void *) reply_icmp, icmp_len);
 
-
-
-
-
-							printf("2. \n");
+						
 							create_ip_header(reply_icmp, ip_len, INITIAL_TTL, ip_protocol_icmp, ip_header->ip_dst, ip_header->ip_src);
-							printf("3. \n");
+							
 							create_ethernet_header(reply_icmp, ethernet_header->ether_shost,  ethernet_header->ether_dhost,  ethertype_ip);
-							print_hdrs(reply_icmp, reply_icmp_len);
+							
 
 
 							if((sr_send_packet(sr, reply_icmp, reply_icmp_len, interface)) == 0){
@@ -299,13 +294,41 @@ void sr_handlepacket(struct sr_instance* sr,
 		}
 		 /*Not for me*/
 		else{
-			printf("Target IP not for Router.\n");
+      printf("Target IP not for Router.\n");
+      struct sr_rt* target_machine_ip = sr_get_routing_entry(sr, ip_header->ip_dst);
+      struct sr_if* next_hop_interface = sr_get_interface(sr, target_machine_ip->interface);
+			
+      struct sr_arpentry *arp_entry = sr_arpcache_lookup(&sr->cache, ip_header->ip_dst);
+      if(arp_entry != NULL){
 
-			/*Look into rtable*/
-	    	/*Match found*/
-	    		/*Send the whole frame to next hop*/
-	    	/*No Match*/
-	    		/*Send ARP request*/
+        ip_header->ip_ttl--;
+        int new_len = sizeof(sr_ethernet_hdr_t) + ntohs(ip_header->ip_len);
+        uint8_t *packet_new = malloc(new_len);
+
+        memcpy(packet_new + sizeof(sr_ethernet_hdr_t), ip_header, ntohs(ip_header->ip_len));
+        ip_header->ip_sum = 0;
+
+        ip_header->ip_sum = cksum((void *) ip_header, ip_header->ip_hl * 4);
+
+        create_ethernet_header(packet_new, arp_entry->mac, next_hop_interface->addr, ethertype_ip);
+
+        if(sr_send_packet(sr, packet_new, new_len, next_hop_interface->name) == 0){
+          printf("Packet Forwarded successflly. \n");
+
+        } else{
+          printf("Failed to forward packet. \n");
+        }
+        
+        free(packet_new);
+
+
+      } else{
+        struct sr_arpreq *created_req = sr_arpcache_queuereq(&sr->cache, ip_header->ip_dst,
+                                                            packet, len, interface);
+
+        handle_arpreq(sr,created_req);
+
+      }
 		}
 	}
 
@@ -350,6 +373,8 @@ void create_ip_header(uint8_t *packet, uint16_t ip_len, uint8_t ip_ttl, uint8_t 
 	reply_ip_header->ip_p = ip_p;
 	reply_ip_header->ip_src = ip_src; 
 	reply_ip_header->ip_dst = ip_dst;
+  reply_ip_header->ip_sum = 0;
+
 	/*TODO flags*/
 	reply_ip_header->ip_sum = cksum((void *) reply_ip_header, reply_ip_header->ip_hl * 4);
 
@@ -362,6 +387,69 @@ void create_icmp_header(uint8_t *packet, uint8_t icmp_type, uint8_t icmp_code){
   	reply_icmp->icmp_sum = 0;
 
   	reply_icmp->icmp_sum = htons(cksum((void *) reply_icmp, sizeof(reply_icmp)));
+}
+
+
+void send_arp_request(struct sr_instance *sr, struct sr_rt *hop_entry, struct sr_if *out_interface) {
+
+  int length = sizeof(sr_ethernet_hdr_t) + sizeof(sr_arp_hdr_t);
+
+  uint8_t* packet = malloc(length);
+
+  create_arp_header(packet, out_interface->addr, (uint8_t *) ("\xff\xff\xff\xff\xff\xff") , out_interface->ip, hop_entry->gw.s_addr, arp_op_request);
+  create_ethernet_header(packet, (uint8_t *) ("\xff\xff\xff\xff\xff\xff"), out_interface->addr,  ethertype_arp);
+
+  if((sr_send_packet(sr, packet, length, out_interface->name)) == 0){
+                printf("ARP REQUEST Sent successflly. \n");
+  } else {
+                printf("Failed to send ARP REQUEST packet.\n");
+  }
+
+  free(packet);
+
+}
+
+
+
+void handle_arpreq(struct sr_instance *sr, struct sr_arpreq *req){
+        time_t now;
+        time(&now);
+        assert(req);
+
+       if (difftime(now, req->sent) > 1.0){
+            if(req->times_sent >= 5){
+                struct sr_packet *packet_head = req->packets;
+                while(packet_head != NULL){
+                    /*create icmp error and send to source of all packets. */
+
+
+                  if((sr_send_packet(sr, packet_head->buf, packet_head->len, packet_head->iface)) == 0){
+                    printf("ARP Reply Sent successflly. \n");
+                  } else {
+                    printf("Failed to send ARP Reply packet.\n");
+                  }
+
+                  if(packet_head->next){
+                    packet_head = packet_head->next;
+                  } else{
+                    packet_head = NULL;
+                  }
+
+                }
+
+                sr_arpreq_destroy(&sr->cache, req);
+            } else {
+                printf("Preparing To send ARP Req. \n");
+                struct sr_rt* target_machine_ip = sr_get_routing_entry(sr, req->ip);
+                struct sr_if* next_hop_interface = sr_get_interface(sr, target_machine_ip->interface);
+
+                send_arp_request(sr, target_machine_ip,next_hop_interface);
+                req->sent = now;
+                req->times_sent++;
+            }
+
+         }
+
 }
 
 
