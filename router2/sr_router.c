@@ -312,7 +312,7 @@ void sr_handlepacket(struct sr_instance* sr,
       printf("Target IP not for Router.\n");
       struct sr_rt* target_machine_ip = sr_get_routing_entry(sr, ip_header->ip_dst);
 
-      if(target_machine_ip == NULL){
+      if(target_machine_ip == 0){
         printf("IP not handled by router as it does not exist in router. \n");
         return;
       }
