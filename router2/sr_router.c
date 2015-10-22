@@ -204,7 +204,10 @@ void sr_handlepacket(struct sr_instance* sr,
 		sr_ip_hdr_t *ip_header =  (sr_ip_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t));
 		struct sr_if* target_ip_interface = sr_get_ip_interface(sr, ip_header->ip_dst);
 
-
+    if(ip_header->ip_v != 4){
+      printf("Only support IPV4. \n");
+      return;
+    }
 
 
 		/*checksum*/
@@ -220,21 +223,7 @@ void sr_handlepacket(struct sr_instance* sr,
 			return;
 		}
 
-		/*TTL*/
-		if (ip_header->ip_ttl <= 1) {
-			uint8_t *reply_icmp = create_icmp_header(11, 0, ethernet_header, ip_header);
-			unsigned int packet_len = sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_t11_hdr_t);
-
-			if ((sr_send_packet(sr, reply_icmp, packet_len, interface)) == 0) {
-				printf("ICMP TTL Sent successflly. \n");
-			} else {
-				printf("Failed to send the packet.\n");
-			}
-
-			free(reply_icmp);
-			return;
-		}
-
+		
 		/*Packet for my IP*/
 		uint32_t dst_ip = ip_header->ip_dst;
 		if (sr_get_ip_interface(sr, dst_ip) != 0) {
@@ -293,7 +282,6 @@ void sr_handlepacket(struct sr_instance* sr,
 			}
 			/*If TCP/UDP we don't care about specific protocol */
 			else {
-				ip_header->ip_ttl--;
 				uint8_t *reply_icmp = create_icmp_header(3, 3, ethernet_header, ip_header);
 				unsigned int packet_len = sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_t3_hdr_t);
 				if ((sr_send_packet(sr, reply_icmp, packet_len, interface)) == 0) {
@@ -309,8 +297,26 @@ void sr_handlepacket(struct sr_instance* sr,
 		}
 		/*Not for me*/
 		else {
-			printf("Target IP not for Router.\n Destination :");
-			print_addr_ip_int(ntohl(ip_header->ip_dst));
+      printf("Target IP not for Router.\n Destination :");
+      print_addr_ip_int(ntohl(ip_header->ip_dst));
+
+      /*TTL*/
+      if (ip_header->ip_ttl <= 1) {
+        uint8_t *reply_icmp = create_icmp_header(11, 0, ethernet_header, ip_header);
+        unsigned int packet_len = sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_t11_hdr_t);
+
+        if ((sr_send_packet(sr, reply_icmp, packet_len, interface)) == 0) {
+          printf("ICMP TTL Sent successflly. \n");
+        } else {
+          printf("Failed to send the packet.\n");
+        }
+
+        free(reply_icmp);
+        return;
+      }
+
+
+		
 			struct sr_rt* target_machine_ip = sr_get_routing_entry(sr, ip_header->ip_dst);
 
 			if (target_machine_ip == 0) {
@@ -416,8 +422,8 @@ uint8_t *create_icmp_header(uint8_t icmp_type,
                             uint8_t icmp_code,
                             sr_ethernet_hdr_t *ethernet_header,
                             sr_ip_hdr_t *ip_header) {
-	uint16_t ip_len;
-	uint8_t *packet;
+	uint16_t ip_len = 0;
+	uint8_t *packet = NULL;
 	if (icmp_type == 11) {
 		ip_len = sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_t11_hdr_t);
 		unsigned int reply_icmp_len = sizeof(sr_ethernet_hdr_t) + ip_len;
