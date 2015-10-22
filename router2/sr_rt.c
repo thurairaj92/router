@@ -199,8 +199,7 @@ struct sr_rt* sr_get_routing_entry(struct sr_instance* sr, uint32_t ar_tip)
     while(rt_walker)
     {
        if(rt_walker->dest.s_addr == ar_tip)
-        { printf("Found Routing Entry Match. \n");
-            return rt_walker; }
+        { return rt_walker; }
         rt_walker = rt_walker->next;
     }
 

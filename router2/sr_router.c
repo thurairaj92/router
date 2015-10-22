@@ -312,7 +312,6 @@ void sr_handlepacket(struct sr_instance* sr,
       printf("Target IP not for Router.\n");
       struct sr_rt* target_machine_ip = sr_get_routing_entry(sr, ip_header->ip_dst);
 
-      printf("Checking machine_ip. \n");
       if(target_machine_ip == 0){
         printf("IP not handled by router as it does not exist in router. \n");
         return;
@@ -446,9 +445,9 @@ void handle_arpreq(struct sr_instance *sr, struct sr_arpreq *req){
 
 
                   if((sr_send_packet(sr, packet_head->buf, packet_head->len, packet_head->iface)) == 0){
-                    printf("ARP Reply Sent successflly. \n");
+                    printf("ICMP Host Unreachable Sent to host in handle_arpreq. \n");
                   } else {
-                    printf("Failed to send ARP Reply packet.\n");
+                    printf("Failed to send ICMP Unreachable to host in handle_arpreq.\n");
                   }
 
                   if(packet_head->next){
