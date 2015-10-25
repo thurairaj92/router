@@ -32,7 +32,10 @@
 void create_arp_header(uint8_t *packet, uint8_t *in_sha, uint8_t *out_sha, uint32_t in_ip, uint32_t out_ip, uint16_t op_code);
 void create_ethernet_header(uint8_t *packet, uint8_t *out_host, uint8_t *in_host, uint16_t eth_type);
 void create_ip_header(uint8_t *packet, uint16_t ip_len, uint8_t ip_ttl, uint8_t ip_p, uint32_t ip_src, uint32_t ip_dst);
-uint8_t *create_icmp_header(uint8_t icmp_type, uint8_t icmp_code, sr_ethernet_hdr_t *ethernet_header, sr_ip_hdr_t *ip_header);
+uint8_t *create_icmp_header(uint8_t icmp_type,
+                            uint8_t icmp_code,
+                            sr_ethernet_hdr_t *ethernet_header,
+                            sr_ip_hdr_t *ip_header, struct sr_if* target_interface);
 void send_arp_request(struct sr_instance *sr, struct sr_rt *hop_entry, struct sr_if *out_interface);
 
 /*---------------------------------------------------------------------
@@ -193,9 +196,6 @@ void sr_handlepacket(struct sr_instance* sr,
 		default:
 			printf("No match of arp op code.\n");
 		}
-
-
-
 	} else if (converted_ether_type_val == ethertype_ip) {
 		printf("Received IP Packet. \n");
 
@@ -203,12 +203,7 @@ void sr_handlepacket(struct sr_instance* sr,
 		/*Get IP header*/
 		sr_ip_hdr_t *ip_header =  (sr_ip_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t));
 		struct sr_if* target_ip_interface = sr_get_ip_interface(sr, ip_header->ip_dst);
-
-    if(ip_header->ip_v != 4){
-      printf("Only support IPV4. \n");
-      return;
-    }
-
+		struct sr_if* target_interface = sr_get_interface(sr, interface);
 
 		/*checksum*/
 		uint16_t ip_cksum = ip_header->ip_sum;
@@ -218,12 +213,26 @@ void sr_handlepacket(struct sr_instance* sr,
 		ip_header->ip_sum = in_cksum;
 
 		/*Validate the header*/
-		if (ip_header->ip_hl < 5 || in_cksum != ip_cksum) {
+		if (ip_header->ip_hl < 5 || in_cksum != ip_cksum || ip_header->ip_v != 4) {
 			printf("Checksum or Length Error in packet\n");
 			return;
 		}
 
-		
+		/*TTL*/
+		if (ip_header->ip_ttl == 0) {
+			uint8_t *reply_icmp = create_icmp_header(11, 0, ethernet_header, ip_header, target_interface);
+			unsigned int packet_len = sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_t11_hdr_t);
+
+			if ((sr_send_packet(sr, reply_icmp, packet_len, interface)) == 0) {
+				printf("ICMP TTL Sent successflly. \n");
+			} else {
+				printf("Failed to send the packet.\n");
+			}
+
+			free(reply_icmp);
+			return;
+		}
+
 		/*Packet for my IP*/
 		uint32_t dst_ip = ip_header->ip_dst;
 		if (sr_get_ip_interface(sr, dst_ip) != 0) {
@@ -234,6 +243,16 @@ void sr_handlepacket(struct sr_instance* sr,
 				sr_icmp_hdr_t *icmp_header = (sr_icmp_hdr_t *)(((uint8_t *)ip_header) + ip_header->ip_hl * 4);
 				uint16_t icmp_len = ntohs(ip_header->ip_len) - ip_header->ip_hl * 4;
 
+				uint16_t icmp_cksum = icmp_header->icmp_sum;
+				icmp_header->icmp_sum = 0;
+				uint16_t in_icmp_cksum =  cksum((void *) icmp_header, icmp_len);
+
+				printf("ICMP packet checksum %" PRId16 "\n", icmp_cksum);
+				printf("Calculated packet checksum %" PRId16 "\n", in_icmp_cksum);
+				if (icmp_cksum != in_icmp_cksum){
+					printf("ICMP checksum failed\n");
+					return;
+				}
 
 				/*	uint8_t *icmp =  (uint8_t *)(packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));*/
 				switch (icmp_header->icmp_type) {
@@ -253,16 +272,11 @@ void sr_handlepacket(struct sr_instance* sr,
 					    (sr_icmp_hdr_t *)(reply_icmp + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
 
 					memcpy(out_icmp, icmp_header, icmp_len);
-
 					out_icmp->icmp_type = 0;
-
 					out_icmp->icmp_sum = 0;
-
 					out_icmp->icmp_sum = cksum((void *) reply_icmp, icmp_len);
 
-
 					create_ip_header(reply_icmp, ip_len, INITIAL_TTL, ip_protocol_icmp, ip_header->ip_dst, ip_header->ip_src);
-
 					create_ethernet_header(reply_icmp, ethernet_header->ether_shost,  ethernet_header->ether_dhost,  ethertype_ip);
 
 
@@ -282,7 +296,8 @@ void sr_handlepacket(struct sr_instance* sr,
 			}
 			/*If TCP/UDP we don't care about specific protocol */
 			else {
-				uint8_t *reply_icmp = create_icmp_header(3, 3, ethernet_header, ip_header);
+				ip_header->ip_ttl--;
+				uint8_t *reply_icmp = create_icmp_header(3, 3, ethernet_header, ip_header, target_interface);
 				unsigned int packet_len = sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_t3_hdr_t);
 				if ((sr_send_packet(sr, reply_icmp, packet_len, interface)) == 0) {
 					printf("Port Unreachable ICMP successflly. \n");
@@ -297,30 +312,27 @@ void sr_handlepacket(struct sr_instance* sr,
 		}
 		/*Not for me*/
 		else {
-      printf("Target IP not for Router.\n Destination :");
-      print_addr_ip_int(ntohl(ip_header->ip_dst));
 
-      /*TTL*/
-      if (ip_header->ip_ttl <= 1) {
-        uint8_t *reply_icmp = create_icmp_header(11, 0, ethernet_header, ip_header);
-        unsigned int packet_len = sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_t11_hdr_t);
+			if (ip_header->ip_ttl <= 1) {
+				uint8_t *reply_icmp = create_icmp_header(11, 0, ethernet_header, ip_header, target_interface);
+				unsigned int packet_len = sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_t11_hdr_t);
 
-        if ((sr_send_packet(sr, reply_icmp, packet_len, interface)) == 0) {
-          printf("ICMP TTL Sent successflly. \n");
-        } else {
-          printf("Failed to send the packet.\n");
-        }
+				if ((sr_send_packet(sr, reply_icmp, packet_len, interface)) == 0) {
+					printf("ICMP TTL Sent successflly. \n");
+				} else {
+					printf("Failed to send the packet.\n");
+				}
 
-        free(reply_icmp);
-        return;
-      }
+				free(reply_icmp);
+				return;
+			}
 
-
-		
+			printf("Target IP not for Router.\n");
+			print_addr_ip_int(ntohl(ip_header->ip_dst));
 			struct sr_rt* target_machine_ip = sr_get_routing_entry(sr, ip_header->ip_dst);
 
 			if (target_machine_ip == 0) {
-				uint8_t *reply_icmp = create_icmp_header(3, 1, ethernet_header, ip_header);
+				uint8_t *reply_icmp = create_icmp_header(3, 0, ethernet_header, ip_header, target_interface);
 				unsigned int packet_len = sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_t3_hdr_t);
 				if ((sr_send_packet(sr, reply_icmp, packet_len, interface)) == 0) {
 					printf("Destination net ICMP successflly. \n");
@@ -421,9 +433,10 @@ void create_ip_header(uint8_t *packet, uint16_t ip_len, uint8_t ip_ttl, uint8_t 
 uint8_t *create_icmp_header(uint8_t icmp_type,
                             uint8_t icmp_code,
                             sr_ethernet_hdr_t *ethernet_header,
-                            sr_ip_hdr_t *ip_header) {
+                            sr_ip_hdr_t *ip_header, struct sr_if* target_interface) {
 	uint16_t ip_len = 0;
 	uint8_t *packet = NULL;
+	
 	if (icmp_type == 11) {
 		ip_len = sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_t11_hdr_t);
 		unsigned int reply_icmp_len = sizeof(sr_ethernet_hdr_t) + ip_len;
@@ -440,7 +453,7 @@ uint8_t *create_icmp_header(uint8_t icmp_type,
 		reply_icmp->icmp_sum = cksum((void *) reply_icmp, sizeof(sr_icmp_t11_hdr_t));
 	}
 
-	else if (icmp_type == 3) {
+	else if (icmp_type == 3 && icmp_code != 1) {
 
 		ip_len = sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_t3_hdr_t);
 		unsigned int reply_icmp_len = sizeof(sr_ethernet_hdr_t) + ip_len;
@@ -457,8 +470,29 @@ uint8_t *create_icmp_header(uint8_t icmp_type,
 		memcpy((void *)reply_icmp->data, (void *)(ip_header), sizeof(sr_ip_hdr_t) + 8);
 		reply_icmp->icmp_sum = cksum((void *) reply_icmp, sizeof(sr_icmp_t3_hdr_t));
 	}
+	else if (icmp_type == 3 && icmp_code ==1) {
 
-	create_ip_header(packet, ip_len, INITIAL_TTL, ip_protocol_icmp, ip_header->ip_dst, ip_header->ip_src);
+		ip_len = sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_t3_hdr_t);
+		unsigned int reply_icmp_len = sizeof(sr_ethernet_hdr_t) + ip_len;
+
+		packet = malloc(reply_icmp_len);
+
+		sr_icmp_t3_hdr_t *reply_icmp = (sr_icmp_t3_hdr_t *) (packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
+		reply_icmp->icmp_type = icmp_type;
+		reply_icmp->icmp_code = icmp_code;
+		reply_icmp->icmp_sum = 0;
+		reply_icmp->unused = 0;
+		reply_icmp->next_mtu = 1000; /*TODO*/
+
+		memcpy((void *)reply_icmp->data, (void *)(ip_header), sizeof(sr_ip_hdr_t) + 8);
+		reply_icmp->icmp_sum = cksum((void *) reply_icmp, sizeof(sr_icmp_t3_hdr_t));
+
+		create_ip_header(packet, ip_len, INITIAL_TTL, ip_protocol_icmp, ip_header->ip_dst, ip_header->ip_src);
+		create_ethernet_header(packet, ethernet_header->ether_shost,  ethernet_header->ether_dhost,  ethertype_ip);
+		return packet;
+	}
+
+	create_ip_header(packet, ip_len, INITIAL_TTL, ip_protocol_icmp, target_interface->ip, ip_header->ip_src);
 	create_ethernet_header(packet, ethernet_header->ether_shost,  ethernet_header->ether_dhost,  ethertype_ip);
 	return packet;
 }
@@ -492,14 +526,19 @@ void handle_arpreq(struct sr_instance *sr, struct sr_arpreq *req) {
 	time(&now);
 	assert(req);
 
+	struct sr_if* target_interface = NULL;
+
 	if (difftime(now, req->sent) > 1.0) {
 		if (req->times_sent >= 5) {
 			struct sr_packet *packet_head = req->packets;
 			while (packet_head != NULL) {
+				target_interface = sr_get_interface(sr, packet_head->iface);
 				/*create icmp error and send to source of all packets. */
+				uint8_t *reply_icmp = create_icmp_header(3, 1, (sr_ethernet_hdr_t *)packet_head->buf, (sr_ip_hdr_t *)(packet_head->buf + sizeof(sr_ethernet_hdr_t)), target_interface);
+				unsigned int packet_len = sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_t3_hdr_t);
 
 
-				if ((sr_send_packet(sr, packet_head->buf, packet_head->len, packet_head->iface)) == 0) {
+				if ((sr_send_packet(sr, reply_icmp, packet_len, packet_head->iface)) == 0) {
 					printf("ICMP Host Unreachable Sent to host in handle_arpreq. \n");
 				} else {
 					printf("Failed to send ICMP Unreachable to host in handle_arpreq.\n");
