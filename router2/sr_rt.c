@@ -192,6 +192,7 @@ struct sr_rt* sr_get_routing_entry(struct sr_instance* sr, uint32_t ar_tip, stru
     struct sr_rt* rt_walker = 0;
 
     /* -- REQUIRES -- */
+    
     assert(sr);
 
     rt_walker = sr->routing_table;
