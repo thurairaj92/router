@@ -202,8 +202,15 @@ struct sr_rt* sr_get_routing_entry(struct sr_instance* sr, uint32_t ar_tip, stru
 
     while(rt_walker)
     {
-        printf("Checking interfce. \n");
+       
+        int loop = 0;
         if((interface != NULL) && (strcmp(interface->name, rt_walker->interface) != 0)){
+            loop = 1;
+        } else if(interface == NULL){
+            loop = 1;
+        }
+
+        if(loop == 1){
             printf("Checking addr. \n");
            if((rt_walker->dest.s_addr & rt_walker->mask.s_addr) == (ar_tip & rt_walker->mask.s_addr)){
                 if(longest_prefix_match == NULL){
@@ -214,7 +221,7 @@ struct sr_rt* sr_get_routing_entry(struct sr_instance* sr, uint32_t ar_tip, stru
                     }
                 }
            }
-        }
+        } 
 
         
         rt_walker = rt_walker->next;
