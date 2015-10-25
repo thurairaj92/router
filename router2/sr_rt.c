@@ -187,7 +187,7 @@ void sr_print_routing_entry(struct sr_rt* entry)
  *
  *---------------------------------------------------------------------*/
 
-struct sr_rt* sr_get_routing_entry(struct sr_instance* sr, uint32_t ar_tip)
+struct sr_rt* sr_get_routing_entry(struct sr_instance* sr, uint32_t ar_tip, struct sr_if* interface)
 {
     struct sr_rt* rt_walker = 0;
 
@@ -196,12 +196,26 @@ struct sr_rt* sr_get_routing_entry(struct sr_instance* sr, uint32_t ar_tip)
 
     rt_walker = sr->routing_table;
 
+    struct sr_rt* longest_prefix_match = NULL;
+
     while(rt_walker)
     {
-       if(rt_walker->dest.s_addr == ar_tip)
-        { return rt_walker; }
+
+        if(interface != NULL && (strcmp(interface->name, rt_walker->interface) != 0)){
+           if((rt_walker->dest.s_addr & rt_walker->mask.s_addr) == (ar_tip & rt_walker->mask.s_addr)){
+                if(longest_prefix_match == NULL){
+                    longest_prefix_match = rt_walker;
+                } else{
+                    if(longest_prefix_match->mask.s_addr < rt_walker->mask.s_addr){
+                        longest_prefix_match = rt_walker;
+                    }
+                }
+           }
+        }
+
+        
         rt_walker = rt_walker->next;
     }
 
-    return 0;
+    return longest_prefix_match;
 }

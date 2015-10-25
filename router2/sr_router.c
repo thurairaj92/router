@@ -329,7 +329,7 @@ void sr_handlepacket(struct sr_instance* sr,
 
 			printf("Target IP not for Router.\n");
 			print_addr_ip_int(ntohl(ip_header->ip_dst));
-			struct sr_rt* target_machine_ip = sr_get_routing_entry(sr, ip_header->ip_dst);
+			struct sr_rt* target_machine_ip = sr_get_routing_entry(sr, ip_header->ip_dst, ethernet_interface);
 
 			if (target_machine_ip == 0) {
 				uint8_t *reply_icmp = create_icmp_header(3, 0, ethernet_header, ip_header, target_interface);
@@ -555,7 +555,7 @@ void handle_arpreq(struct sr_instance *sr, struct sr_arpreq *req) {
 			sr_arpreq_destroy(&sr->cache, req);
 		} else {
 			printf("Preparing To send ARP Req. \n");
-			struct sr_rt* target_machine_ip = sr_get_routing_entry(sr, req->ip);
+      struct sr_rt* target_machine_ip = sr_get_routing_entry(sr, req->ip, NULL);
 			struct sr_if* next_hop_interface = sr_get_interface(sr, target_machine_ip->interface);
 
 			send_arp_request(sr, target_machine_ip, next_hop_interface);
