@@ -296,7 +296,7 @@ void sr_handlepacket(struct sr_instance* sr,
 			}
 			/*If TCP/UDP we don't care about specific protocol */
 			else {
-				ip_header->ip_ttl--;
+				
 				uint8_t *reply_icmp = create_icmp_header(3, 3, ethernet_header, ip_header, target_interface);
 				unsigned int packet_len = sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_t3_hdr_t);
 				if ((sr_send_packet(sr, reply_icmp, packet_len, interface)) == 0) {
