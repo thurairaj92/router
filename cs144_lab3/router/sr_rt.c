@@ -176,3 +176,55 @@ void sr_print_routing_entry(struct sr_rt* entry)
     printf("%s\n",entry->interface);
 
 } /* -- sr_print_routing_entry -- */
+
+
+/*--------------------------------------------------------------------- 
+ * Method: sr_get_routing_entry
+ * Scope: Global
+ *
+ * Given an interface name return the interface record or 0 if it doesn't
+ * exist.
+ *
+ *---------------------------------------------------------------------*/
+
+struct sr_rt* sr_get_routing_entry(struct sr_instance* sr, uint32_t ar_tip, struct sr_if* interface)
+{
+    struct sr_rt* rt_walker = 0;
+
+    /* -- REQUIRES -- */
+
+
+    assert(sr);
+
+    rt_walker = sr->routing_table;
+
+    struct sr_rt* longest_prefix_match = NULL;
+
+    while(rt_walker)
+    {
+       
+        int loop = 0;
+        if((interface != NULL) && (strcmp(interface->name, rt_walker->interface) != 0)){
+            loop = 1;
+        } else if(interface == NULL){
+            loop = 1;
+        }
+
+        if(loop == 1){
+           if((rt_walker->dest.s_addr & rt_walker->mask.s_addr) == (ar_tip & rt_walker->mask.s_addr)){
+                if(longest_prefix_match == NULL){
+                    longest_prefix_match = rt_walker;
+                } else{
+                    if(longest_prefix_match->mask.s_addr < rt_walker->mask.s_addr){
+                        longest_prefix_match = rt_walker;
+                    }
+                }
+           }
+        } 
+
+        
+        rt_walker = rt_walker->next;
+    }
+
+    return longest_prefix_match;
+}

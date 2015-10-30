@@ -13,6 +13,7 @@
 #include <sys/time.h>
 #include <stdio.h>
 
+
 #include "sr_protocol.h"
 #include "sr_arpcache.h"
 
@@ -63,6 +64,7 @@ int sr_verify_routing_table(struct sr_instance* sr);
 int sr_send_packet(struct sr_instance* , uint8_t* , unsigned int , const char*);
 int sr_connect_to_server(struct sr_instance* ,unsigned short , char* );
 int sr_read_from_server(struct sr_instance* );
+void handle_arpreq(struct sr_instance *sr, struct sr_arpreq *req);
 
 /* -- sr_router.c -- */
 void sr_init(struct sr_instance* );
