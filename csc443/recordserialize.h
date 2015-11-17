@@ -1,3 +1,8 @@
+#include <stdio.h>
+#include <string.h>
+#include <vector>
+#include <iostream>
+#include <stdlib.h>
 #ifndef RECORDSERIALIZE_H
 #define RECORDSERIALIZE_H
 
@@ -5,7 +10,6 @@
 #define SCHEMA_NUM_ATTR 100
 #define SCHEMA_ATTR_LEN 10
 
-#include <vector>
 typedef const char* V;
 typedef std::vector<V> Record;
 

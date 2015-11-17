@@ -71,6 +71,11 @@ int main(int argc , char** argv){
 		
 		record_count++;	
 		free(temp);
+
+		for (Record::iterator it = cur_record.begin(); it < cur_record.end(); it++) {
+	        const char *attr = *it;
+	        printf("%s", attr);
+    	}	
 	}
 
 	memcpy(page.data, "thur", SCHEMA_ATTR_LEN);

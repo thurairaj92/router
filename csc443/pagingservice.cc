@@ -16,10 +16,6 @@ void init_fixed_len_page(Page *page, int page_size, int slot_size){
 
 }
 
-
-
-
-
 /**
  * Calculates the maximal number of records that fit in a page
  */
@@ -95,8 +91,6 @@ void write_fixed_len_page(Page *page, int slot, Record *r){
 	
 	page_dictionary[slot] = 1;
 
-
-
 }
  
 /**
@@ -107,8 +101,5 @@ void read_fixed_len_page(Page *page, int slot, Record *r){
 	char * slot_entry = page_dictionary + fixed_len_page_capacity(page) + (slot * page->slot_size);
 	int size = fixed_len_sizeof(r);
 	fixed_len_read(slot_entry, size, r);
-	
-
-
 
 }
