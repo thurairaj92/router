@@ -9,7 +9,8 @@ void init_fixed_len_page(Page *page, int page_size, int slot_size){
 	//Intitalize Page Struct, and set data to char[page_sze].
 
 	
-	page->data = new char[page_size];
+	//page->data = new char[page_size];
+	page->data = malloc(page_size);
 	page->page_size = page_size;
 	page->slot_size = slot_size;
 	memset(page->data,0,page_size);
@@ -35,8 +36,12 @@ int fixed_len_page_freeslots(Page *page){
 	int free_slots  = 0;
 	int page_capacity = fixed_len_page_capacity(page);
 	char *page_dictionary = (char *) page->data;
+
+
+
 	for(int z = 0; z < page_capacity; z++){
-		int slot_value = (page_dictionary[z] - 1);
+		int slot_value = 1 - page_dictionary[z];
+		// std::cout << "Index z: " << z << " is " << slot_value << '\n' ;
 		free_slots += slot_value;
 	}
 
@@ -52,6 +57,7 @@ int fixed_len_page_freeslots(Page *page){
  */
 int add_fixed_len_page(Page *page, Record *r){
 	int num_free_slots = fixed_len_page_freeslots(page);
+	// std::cout << "------------------" << '\n';
 	//add the page if there are free slots;
 
 	if(num_free_slots > 0){
@@ -69,12 +75,10 @@ int add_fixed_len_page(Page *page, Record *r){
 			write_fixed_len_page(page,slot_to_insert,r);
 			return slot_to_insert;
 		}
-
 		return -1;
 
 
 	}
-
 	return -1;
 
 
@@ -84,22 +88,25 @@ int add_fixed_len_page(Page *page, Record *r){
  * Write a record into a given slot.
  */
 void write_fixed_len_page(Page *page, int slot, Record *r){
-
 	char * page_dictionary = (char *) page->data;
 	char * slot_entry = page_dictionary + fixed_len_page_capacity(page) + (slot * page->slot_size);
-	fixed_len_write(r, slot_entry);
 	
+	fixed_len_write(r, slot_entry);
 	page_dictionary[slot] = 1;
-
 }
  
 /**
  * Read a record from the page from a given slot.
  */
-void read_fixed_len_page(Page *page, int slot, Record *r){
+bool read_fixed_len_page(Page *page, int slot, Record *r){
 	char * page_dictionary = (char *) page->data;
-	char * slot_entry = page_dictionary + fixed_len_page_capacity(page) + (slot * page->slot_size);
-	int size = fixed_len_sizeof(r);
-	fixed_len_read(slot_entry, size, r);
-
+	
+	if(page_dictionary[slot] == 1){
+		char * slot_entry = page_dictionary + fixed_len_page_capacity(page) + (slot * page->slot_size);
+		int size = fixed_len_sizeof(r);
+		fixed_len_read(slot_entry, size, r);
+		return true;
+	}else{
+		return false;
+	}
 }

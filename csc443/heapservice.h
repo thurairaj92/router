@@ -3,7 +3,9 @@
 
 
 #include "pagingservice.h"
+#include <stdint.h>
 
+typedef int PageID;
 
 typedef struct {
     FILE *file_ptr;
@@ -11,10 +13,9 @@ typedef struct {
     int64_t latest_dir;
     PageID next_page_id;
 
-} Heapfile
+} Heapfile;
 
 
-typedef int PageID;
  
 typedef struct {
     int page_id;
@@ -22,11 +23,13 @@ typedef struct {
 } RecordID;
 
 
-#define HEAP_NUM_VARS 3
-#define HEAP_OFFSET_LEN 8
+
 #define INITIAL_OFFSET 0x0LL
 #define OFFSET_NULL 0x000
 #define MASTERENTRYID 0xCAFED00DB16B00B5LL
+
+
+
 
 
 typedef struct {
@@ -47,7 +50,7 @@ typedef struct {
 /**
  * Initalize a heapfile to use the file and page size given.
  */
-void init_heapfile(Heapfile *heapfile, int page_size, FILE *file);
+void init_heapfile(Heapfile *heapfile, int page_size, FILE *file, bool is_read=false);
 /**
  * Allocate another page in the heapfile.  This grows the file by a page.
  */
@@ -68,7 +71,7 @@ class RecordIterator {
     RecordIterator(Heapfile *heapfile);
     Record next();
     bool hasNext();
-}
+};
 
 
 #endif

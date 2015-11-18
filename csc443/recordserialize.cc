@@ -37,14 +37,29 @@ void fixed_len_read(void *buf, int size, Record *record){
 	//If size matches record size, then only do this.
 	if(size == (fixed_len_sizeof(record))){
 		//loop over attr times and populate the record.
-		for(int z = 0; z < SCHEMA_NUM_ATTR; z++){
+		for(int z = 0; z < record->size(); z++){
 			char *curattr = (char *) record->at(z);
 			int offset = SCHEMA_ATTR_LEN * z;
 			((char *) buf) + offset;
 			memcpy(curattr, ((char *) buf) + offset, SCHEMA_ATTR_LEN);
 
 		}
+	}else{
+		std::cout << "false\n";
+		
 	}
+}
 
 
+
+void fixed_len_read_cus(void *buf, int size, Record *record){
+	//If size matches record size, then only do this.
+	//loop over attr times and populate the record.
+	for(int z = 0; z < record->size(); z++){
+		void *curattr = (void *) record->at(z);
+		int offset = size * z;
+		memcpy(curattr, buf + offset, size);
+
+	}
+	std::cout << "After add :" << buf << "\n";
 }

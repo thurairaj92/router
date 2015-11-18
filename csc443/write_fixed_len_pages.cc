@@ -4,6 +4,8 @@
 #include <string.h>
 #include <iostream>
 #include <stdlib.h>
+#include <iomanip>
+#include <sys/timeb.h>
 #include "pagingservice.h"
 #include "recordserialize.h"
 
@@ -44,12 +46,18 @@ int main(int argc , char** argv){
 
 	int total_pages = 0;
 	int record_count = 0;
+	struct timeb stimer;
+	long begin, end;
 	
 	init_fixed_len_page(&page, page_size, FIXED_SIZE);
 	int record_cap = fixed_len_page_capacity(&page);
 
-	//as long as there is a line to read.
+	ftime(&stimer);
+	begin = stimer.time * 1000 + stimer.millitm;
+
 	while(getline(csvfile, line)){
+		cur_record.clear();
+
 		temp = (char *)malloc(line.length() + 1);
 		strcpy(temp, line.c_str());
 
@@ -61,31 +69,35 @@ int main(int argc , char** argv){
 		 	cur_record.push_back((V)col);
 		 	token = strtok(NULL, ",");
     	}
-
-
+    	
     	if(add_fixed_len_page(&page, &cur_record) < 0){
-    		total_pages++;
-    		fputs((char *)page.data, page_file);
-    		memset(page.data,0,page_size);
+    	 	fwrite (page.data , 1, page.page_size, page_file);
+    	 	memset(page.data,0,page_size);
+    	 	total_pages++;
+
+    	 	add_fixed_len_page(&page, &cur_record);
     	}
-		
 		record_count++;	
-		free(temp);
-
-		for (Record::iterator it = cur_record.begin(); it < cur_record.end(); it++) {
-	        const char *attr = *it;
-	        printf("%s", attr);
-    	}	
 	}
 
-	memcpy(page.data, "thur", SCHEMA_ATTR_LEN);
-
-	if(strlen((char *)page.data) > 0){
+	if (fixed_len_page_freeslots(&page) < fixed_len_page_capacity(&page)) {
+		fwrite (page.data , 1, page.page_size, page_file);
 		total_pages++;
-    	fputs((char *)page.data, page_file);
     	memset(page.data,0,page_size);
+    	cur_record.clear();
 	}
 
+	ftime(&stimer);
+	end = stimer.time * 1000 + stimer.millitm;
+	fclose(page_file);
+	csvfile.close();
 
-	
+
+	double second = double(end - begin)/1000.0 ;
+	double rate = (double)record_count / second;
+	cout<< "NUMBER OF RECORDS: " << record_count << '\n';
+	cout<< "NUMBER OF PAGES: " << total_pages << '\n';
+	cout << "TIME :" << end - begin << " MILLISECONDS \n";
+	cout << "RATE :" << fixed << setprecision( 6 ) << rate;
+
 }

@@ -9,9 +9,13 @@
 
 #define SCHEMA_NUM_ATTR 100
 #define SCHEMA_ATTR_LEN 10
+#define HEAP_NUM_VARS 3
+#define HEAP_OFFSET_LEN 8
 
 typedef const char* V;
 typedef std::vector<V> Record;
+
+#define FALSE false
 
 
 /**
@@ -31,6 +35,6 @@ void fixed_len_write(Record *record, void *buf);
  * stores the record in `record`.
  */
 void fixed_len_read(void *buf, int size, Record *record);
-
+void fixed_len_read_cus(void *buf, int size, Record *record);
 
 #endif
