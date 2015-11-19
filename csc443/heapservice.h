@@ -24,12 +24,9 @@ typedef struct {
 
 
 
-#define INITIAL_OFFSET 0x0LL
+#define INITIAL_OFFSET 1
 #define OFFSET_NULL 0x000
 #define MASTERENTRYID 0xCAFED00DB16B00B5LL
-
-
-
 
 
 typedef struct {
@@ -64,14 +61,65 @@ bool read_page(Heapfile *heapfile, PageID pid, Page *page);
  */
 bool write_page(Page *page, Heapfile *heapfile, PageID pid); 
 
+Page *create_heap_page(Heapfile *heapfile);
 
+int max_space_for_entry(Page *page);
+
+class MasterDirectoryIterator {
+    public:
+   	 	MasterDirectoryIterator(Heapfile *heapfile);
+    	Page * next();
+    	bool hasNext();
+
+	private:
+		Heapfile *heap_file;
+
+		Page *latest_dir;
+
+		int64_t next_dir_offset;
+
+
+};
+
+class DirectoryEntryIterator {
+    public:
+   	 	DirectoryEntryIterator(Heapfile *heapfile, Page *latest_dir_in);
+    	Page * next(int64_t *offset);
+    	bool hasNext();
+
+	private:
+		Heapfile *heap_file;
+
+		Page *latest_dir;
+
+		Page *latest_page;
+		int cur_slot;
+		int page_capacity;
+		void *buf;
+	
+};
 
 class RecordIterator {
     public:
-    RecordIterator(Heapfile *heapfile);
-    Record next();
-    bool hasNext();
+   	 	RecordIterator(Heapfile *heapfile);
+    	Record *next();
+    	bool hasNext();
+    	bool nextSlot();
+    	bool nextDirEntry();
+    	bool nextMasterDir();
+
+	private:
+		Heapfile *heap_file;
+		DirectoryEntryIterator *dirEntryIterator;
+		MasterDirectoryIterator masterDirIterator;
+		PageSlotIterator * pageSlotIterator;
+		Page *latest_dir;
+
+		int64_t next_dir_offset;
 };
+
+
+
 
 
 #endif

@@ -47,5 +47,21 @@ void write_fixed_len_page(Page *page, int slot, Record *r);
  */
 bool read_fixed_len_page(Page *page, int slot, Record *r);
 
+bool delete_fixed_len_page(Page *page, int slot);
+
+class PageSlotIterator {
+public:
+	PageSlotIterator(Page *cur_page);
+	bool hasNext();
+	Record *next();
+
+private:
+	Record *cur_record;
+	int cur_slot;
+	Page *cur_page;
+	int page_capacity;
+};
+
+
 
 #endif

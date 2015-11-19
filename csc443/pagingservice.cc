@@ -41,7 +41,7 @@ int fixed_len_page_freeslots(Page *page){
 
 	for(int z = 0; z < page_capacity; z++){
 		int slot_value = 1 - page_dictionary[z];
-		// std::cout << "Index z: " << z << " is " << slot_value << '\n' ;
+		// //std::cout << "Index z: " << z << " is " << slot_value << '\n' ;
 		free_slots += slot_value;
 	}
 
@@ -57,7 +57,7 @@ int fixed_len_page_freeslots(Page *page){
  */
 int add_fixed_len_page(Page *page, Record *r){
 	int num_free_slots = fixed_len_page_freeslots(page);
-	// std::cout << "------------------" << '\n';
+	// //std::cout << "------------------" << '\n';
 	//add the page if there are free slots;
 
 	if(num_free_slots > 0){
@@ -109,4 +109,67 @@ bool read_fixed_len_page(Page *page, int slot, Record *r){
 	}else{
 		return false;
 	}
+}
+
+bool delete_fixed_len_page(Page *page, int slot){
+	char * page_dictionary = (char *) page->data;
+	
+	if(page_dictionary[slot] == 1){
+		char * slot_entry = page_dictionary + fixed_len_page_capacity(page) + (slot * page->slot_size);
+		memset(slot_entry, '\0' ,page->slot_size);
+		page_dictionary[slot] = 0;
+		return true;
+	}else{
+		return false;
+	}
+}
+
+
+
+
+PageSlotIterator::PageSlotIterator(Page *cur_page_in){
+	cur_record = new Record(SCHEMA_NUM_ATTR);
+	for(int z = 0; z < SCHEMA_NUM_ATTR; z++){
+		char *temp = (char *)malloc(SCHEMA_ATTR_LEN+1);
+		memset(temp, '\0', SCHEMA_ATTR_LEN+1);
+		cur_record->at(z) = temp;
+	}
+	cur_page = cur_page_in;
+	cur_slot = 0;
+	page_capacity = fixed_len_page_capacity(cur_page);
+
+}
+
+
+
+bool PageSlotIterator::hasNext(){
+
+	if(cur_slot >= page_capacity){
+
+		return false;
+	}
+
+
+	//std::cout << "slot : " << cur_slot << " page cap " << page_capacity << "\n";
+	while(cur_slot < page_capacity && !read_fixed_len_page(cur_page, cur_slot, cur_record)){
+			cur_slot++;
+		}
+	return cur_slot < page_capacity;
+}
+
+
+
+Record *PageSlotIterator::next(){
+
+	if(hasNext()){
+		
+		cur_slot++;	
+		return cur_record;
+	} 
+
+
+
+
+
+
 }

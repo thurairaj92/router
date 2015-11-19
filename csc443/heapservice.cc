@@ -3,7 +3,7 @@
 
 #include "heapservice.h"
 
-#define INITIAL_OFFSET 1
+
 #define OFFSET_NULL 0x000
 
 
@@ -35,7 +35,7 @@ void destroy(Page *to_destroy){
 Page *create_heap_page(Heapfile *heapfile){
 	Page *heap_page = new Page;
 	init_fixed_len_page(heap_page, heapfile->page_size, HEAP_NUM_VARS * HEAP_OFFSET_LEN);
-	memset( heap_page->data, '\0', heapfile->page_size);
+	//memset( heap_page->data, '\0', heapfile->page_size);
 	return heap_page;
 }
 
@@ -75,7 +75,6 @@ bool write_entry(Page *page, DirectoryEntry *entry){
 		no_entry++;
 	}
 
-	std::cout << "Max : " << max << " Current" << no_entry << "\n";
 
 	if (no_entry < max){
 		memcpy(buf, entry, sizeof(DirectoryEntry));
@@ -84,14 +83,6 @@ bool write_entry(Page *page, DirectoryEntry *entry){
 		return false;
 	}
 }
-
-
-/*void read_entry_in_slot(Page *page, DirectoryEntry *entry, int slot){
-	void *buf = page->data + sizeof(MasterDirectoryEntry);
-	buf += (slot * sizeof(DirectoryEntry));
-	memcpy(entry, buf, sizeof(DirectoryEntry));
-}*/
-
 
 bool search_page_id(Page *directory , PageID pageid){
 	void *buf = directory->data + sizeof(MasterDirectoryEntry);
@@ -110,8 +101,6 @@ bool search_page_id(Page *directory , PageID pageid){
 	return false;
 
 }
-
-
 
 int64_t search_page(Heapfile *heapfile, PageID pageid, int *page_slot, Page **master_dir){
 
@@ -194,10 +183,11 @@ int64_t search_page(Heapfile *heapfile, PageID pageid, int *page_slot, Page **ma
  */
 void init_heapfile(Heapfile *heapfile, int page_size, FILE *file, bool is_read){
 	
+
 	heapfile->latest_dir = INITIAL_OFFSET;
 	heapfile->page_size = page_size;
 	heapfile->file_ptr = file;
-	heapfile->next_page_id = 0;
+	heapfile->next_page_id = 1;
 
 
 	//Create Main/Master Directory
@@ -206,38 +196,37 @@ void init_heapfile(Heapfile *heapfile, int page_size, FILE *file, bool is_read){
 	if(!is_read){
 
 		// create a new directory page within Master Directory
-		//create_master_dir_page(directory_main, INITIAL_OFFSET);
-		
 		MasterDirectoryEntry *entry = (MasterDirectoryEntry *)(directory_main->data);
 		entry->next = OFFSET_NULL;
 		entry->offset = INITIAL_OFFSET;
 		entry->identifier = MASTERENTRYID;
 
 		//Write to File
-	
 		fseeko(file,INITIAL_OFFSET,SEEK_SET);
 		fwrite(directory_main->data, heapfile->page_size, 1, file);
 		fflush(file);
 
+		Page *check_first_page = create_heap_page(heapfile);
 
-		Page *directory_dupl = create_heap_page(heapfile);
-
-		fseeko(file,INITIAL_OFFSET,SEEK_SET);
-		fread(directory_dupl->data, heapfile->page_size, 1, file);
-
-		MasterDirectoryEntry *dup_entry = (MasterDirectoryEntry *)(directory_dupl->data);
 
 	} else {
+		
+		Page *check_first_page = create_heap_page(heapfile);
 
-		//We are reading from Heap file
-		//TODO
+		fseeko(file,INITIAL_OFFSET,SEEK_SET);
+		fread(check_first_page->data, heapfile->page_size, 1, file);
+		MasterDirectoryEntry *check_entry = (MasterDirectoryEntry *)(check_first_page->data);
+
+
+		if(check_entry->identifier != MASTERENTRYID){
+			printf("enter prime\n");
+		 	exit(1);
+		}
+
 	}
 	//Free memory occupied by main dir.
 	destroy(directory_main);
 }
-
-
-
 
 /**
  * Allocate another page in the heapfile.  This grows the file by a page.
@@ -336,6 +325,7 @@ PageID alloc_page(Heapfile *heapfile){
 
 	return page_id;
 }
+
 /**
  * Read a page into memory
  */
@@ -347,7 +337,6 @@ bool read_page(Heapfile *heapfile, PageID pid, Page *page){
 	int page_size = heapfile->page_size;
 
 	search_offset = search_page(heapfile,pid,&search_slot,&master_dir);
-	std::cout << "search offset read " << search_offset << "\n";
 	if(search_offset != -1){
 
 		fseeko(file,search_offset,SEEK_SET);
@@ -371,7 +360,7 @@ bool write_page(Page *page, Heapfile *heapfile, PageID pid){
 	int page_size = heapfile->page_size;
 
 	search_offset = search_page(heapfile,pid,&search_slot, &master_dir);
-	std::cout << "search offset write " << search_offset << "\n";
+	//std::cout << "Offset" << search_offset << "\n";
 	//PageID must exist for write to work.
 	if(search_offset != -1){
 		DirectoryEntry *dir_record;
@@ -387,7 +376,9 @@ bool write_page(Page *page, Heapfile *heapfile, PageID pid){
 
 		fseeko(file,search_offset,SEEK_SET);
 		fwrite(page->data, page_size,1,file);
-		std::cout << "WRITE" << (char *)page->data << "\n";
+
+		//std::cout << "Array :" << page->data << "\n"; 
+
 		fflush(file);
 
 		destroy(master_dir);
@@ -395,40 +386,196 @@ bool write_page(Page *page, Heapfile *heapfile, PageID pid){
 		Page * newPage = create_heap_page(heapfile);
 		read_page(heapfile,pid,newPage);
 
-		std::cout << "READ" << (char *)newPage->data << "\n";
 		return true;
 
 	}
 
 	return false;
 }
-	
+
+DirectoryEntryIterator::DirectoryEntryIterator(Heapfile *heapfile, Page *latest_dir_in){
+	heap_file = heapfile;
+	latest_dir = latest_dir_in;
+	buf = latest_dir->data + sizeof(MasterDirectoryEntry);
+	cur_slot = 0;
+	latest_page = new Page;
+	init_fixed_len_page(latest_page, heapfile->page_size, SCHEMA_NUM_ATTR * SCHEMA_ATTR_LEN);
+	page_capacity =  max_space_for_entry(latest_dir);
+}
+
+bool DirectoryEntryIterator::hasNext() {
+
+	while(cur_slot < page_capacity){
+			
+			if(((char *)buf)[0] != '\0'){
+				
+				break;
+			}
+			buf += sizeof(DirectoryEntry);
+			cur_slot++;
+		}
 
 
 
-class RecordIterator {
-	RecordID *record;
-	Heapfile *heap;
-	Page *cur_page;
 
-    public:
-    RecordIterator(Heapfile *heapfile);
-    Record next();
-    bool hasNext();
-};
 
-RecordIterator::RecordIterator(Heapfile *heapfile){
-	record = (RecordID *)malloc(sizeof(record));
-	record->page_id = 0;
-	record->slot = 0;
-	heap = heapfile;
-	read_page(heap, record->page_id, cur_page);
+	return cur_slot < page_capacity;
+}
+
+
+Page *DirectoryEntryIterator::next(int64_t *offset){
+
+		while(cur_slot < page_capacity){
+			
+			if(((char *)buf)[0] != '\0'){
+				DirectoryEntry *temp = (DirectoryEntry *)buf;
+				//std::cout << "Offset " << temp->offset << "\n";
+				fseeko(heap_file->file_ptr,temp->offset,SEEK_SET);
+				fread(latest_page->data,heap_file->page_size,1,heap_file->file_ptr);	
+				cur_slot++;	
+				buf += sizeof(DirectoryEntry);
+
+				*offset = temp->offset;
+				return latest_page;
+			}
+			buf += sizeof(DirectoryEntry);
+			cur_slot++;
+		}
+
+		return NULL;
+}
+
+
+MasterDirectoryIterator::MasterDirectoryIterator(Heapfile *heap){
+	heap_file = heap;
+	latest_dir = create_heap_page(heap);
+	next_dir_offset = INITIAL_OFFSET;
 
 }
+
+
+
+Page *MasterDirectoryIterator::next() {
+
+	if(hasNext()){
+
+		fseeko(heap_file->file_ptr,next_dir_offset, SEEK_SET);
+		fread(latest_dir->data,heap_file->page_size,1,heap_file->file_ptr);
+
+		MasterDirectoryEntry *master_entry = (MasterDirectoryEntry *)(latest_dir->data);
+
+		if((master_entry->offset != next_dir_offset) || (master_entry->identifier != MASTERENTRYID)) {
+			printf("Error reading master directory entry from heapfile.\n");
+			exit(1);
+		}
+
+		next_dir_offset = master_entry->next;
+		
+		if(next_dir_offset == OFFSET_NULL){
+			next_dir_offset = -20;
+
+
+		}
+
+		return latest_dir;
+
+	}
+
+
+}
+
+bool MasterDirectoryIterator::hasNext(){
+
+	return next_dir_offset != -20;
+
+}
+
+RecordIterator::RecordIterator(Heapfile *heapfile):masterDirIterator(heapfile) {
+	heap_file = heapfile; 
+	dirEntryIterator = NULL;
+	pageSlotIterator = NULL;
+}
+
+
+bool RecordIterator::nextSlot(){
+
+	if(pageSlotIterator){
+		//std::cout << "PageSLotIterator Has Next" << "\n";
+		if(pageSlotIterator->hasNext()){
+
+			return true;
+		}
+		//std::cout << "PageSlotIterator Has Exhausted" << "\n";
+		delete pageSlotIterator;
+		pageSlotIterator = NULL;
+
+
+	}
+
+	return false;
+
+
+}
+
+
+bool RecordIterator::nextDirEntry(){
+
+	
+	if(dirEntryIterator){
+		if(dirEntryIterator->hasNext()){
+			//std::cout << "Directory Entry Has Next" << "\n";
+			int64_t dummy;
+			Page *new_page = dirEntryIterator->next(&dummy);
+			pageSlotIterator = new PageSlotIterator(new_page);
+			return nextSlot();
+		}
+
+		//std::cout << "DirectoryEntry Has Exhausted" << "\n";
+		delete dirEntryIterator;
+		dirEntryIterator = NULL;
+	}
+
+	return false;
+}
+
+bool RecordIterator::nextMasterDir(){
+
+	if(masterDirIterator.hasNext()){
+		//std::cout << "MasterDir Has Next" << "\n";
+		Page *master_dir = masterDirIterator.next();
+		dirEntryIterator = new DirectoryEntryIterator(heap_file,master_dir);
+		return nextDirEntry();
+
+	}
+	//std::cout << "MasterDir Has Exhausted" << "\n";
+	return false;
+
+}
+
 
 bool RecordIterator::hasNext(){
-	while(heap->page_id)
+	if(nextSlot()){
+		return true;
+	} else if(nextDirEntry()){
+		return true;
+	} else if(nextMasterDir()){
+		return true;
+	}
+
+	//std::cout << "hasNext Has Exhauseted" << "\n";
+	return false;
 }
 
+
+Record *RecordIterator::next(){
+
+	if(hasNext()){
+
+		return pageSlotIterator->next();
+	}
+}
+
+
+	
 
 
