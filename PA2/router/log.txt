@@ -1,0 +1,139 @@
+Using VNS sr stub code revised 2009-10-14 (rev 0.20)
+Loading routing table from server, clear local routing table.
+Loading routing table
+---------------------------------------------
+Destination	Gateway		Mask	Iface
+10.0.1.100		10.0.1.100	255.255.255.255	eth3
+192.168.2.2		192.168.2.2	255.255.255.255	eth1
+172.64.3.10		172.64.3.10	255.255.255.255	eth2
+---------------------------------------------
+Client mininet connecting to Server localhost:8888
+Requesting topology 0
+successfully authenticated as mininet
+Loading routing table from server, clear local routing table.
+Loading routing table
+---------------------------------------------
+Destination	Gateway		Mask	Iface
+10.0.1.100		10.0.1.100	255.255.255.255	eth3
+192.168.2.2		192.168.2.2	255.255.255.255	eth1
+172.64.3.10		172.64.3.10	255.255.255.255	eth2
+---------------------------------------------
+Router interfaces:
+eth3	HWaddrba:db:32:a2:05:c8
+	inet addr 10.0.1.1
+eth2	HWaddrf2:12:5c:f9:13:09
+	inet addr 172.64.3.1
+eth1	HWaddr22:6a:ac:b3:9b:29
+	inet addr 192.168.2.1
+ <-- Ready to process packets --> 
+
+******** NEW  PACKET ********
+--- IP Packet
+--- --- - Note : Packet NOT for Router
+--- --- - Note : TTL = 0
+--- --- - Note : Try to create ARP Req for Type 11
+--- --- - Note : ARP Req Preps 
+--- --- Report : ARP REQUEST Sent. 
+******* END of Process ******
+
+******** NEW  PACKET ********
+--- IP Packet
+--- --- - Note : Packet NOT for Router
+--- --- - Note : TTL = 0
+--- --- - Note : Try to create ARP Req for Type 11
+******* END of Process ******
+
+******** NEW  PACKET ********
+--- IP Packet
+--- --- - Note : Packet NOT for Router
+--- --- - Note : TTL = 0
+--- --- - Note : Try to create ARP Req for Type 11
+******* END of Process ******
+
+******** NEW  PACKET ********
+--- IP Packet
+--- --- - Note : Packet NOT for Router
+--- --- - Note : Try to create ARP Req for IP
+--- --- - Note : ARP Req Preps 
+--- --- Report : ARP REQUEST Sent. 
+******* END of Process ******
+
+******** NEW  PACKET ********
+--- IP Packet
+--- --- - Note : Packet NOT for Router
+--- --- - Note : Try to create ARP Req for IP
+******* END of Process ******
+
+******** NEW  PACKET ********
+--- IP Packet
+--- --- - Note : Packet NOT for Router
+--- --- - Note : Try to create ARP Req for IP
+******* END of Process ******
+
+******** NEW  PACKET ********
+--- IP Packet
+--- --- - Note : Packet NOT for Router
+--- --- - Note : Try to create ARP Req for IP
+******* END of Process ******
+
+******** NEW  PACKET ********
+--- IP Packet
+--- --- - Note : Packet NOT for Router
+--- --- - Note : Try to create ARP Req for IP
+******* END of Process ******
+
+******** NEW  PACKET ********
+--- IP Packet
+--- --- - Note : Packet NOT for Router
+--- --- - Note : Try to create ARP Req for IP
+******* END of Process ******
+
+******** NEW  PACKET ********
+--- IP Packet
+--- --- - Note : Packet NOT for Router
+--- --- - Note : Try to create ARP Req for IP
+******* END of Process ******
+
+******** NEW  PACKET ********
+--- IP Packet
+--- --- - Note : Packet NOT for Router
+--- --- - Note : Try to create ARP Req for IP
+******* END of Process ******
+
+******** NEW  PACKET ********
+--- IP Packet
+--- --- - Note : Packet NOT for Router
+--- --- - Note : Try to create ARP Req for IP
+******* END of Process ******
+
+******** NEW  PACKET ********
+--- IP Packet
+--- --- - Note : Packet NOT for Router
+--- --- - Note : Try to create ARP Req for IP
+******* END of Process ******
+
+******** NEW  PACKET ********
+--- IP Packet
+--- --- - Note : Packet NOT for Router
+--- --- - Note : Try to create ARP Req for IP
+******* END of Process ******
+
+******** NEW  PACKET ********
+--- IP Packet
+--- --- - Note : Packet NOT for Router
+--- --- - Note : Try to create ARP Req for IP
+******* END of Process ******
+
+******** NEW  PACKET ********
+--- IP Packet
+--- --- - Note : Packet NOT for Router
+--- --- - Note : Try to create ARP Req for IP
+******* END of Process ******
+
+******** NEW  PACKET ********
+--- ARP Packet
+--- --- ARP Reply.
+--- --- - Note: Begin sending IP packets in queue.
+--- --- - Report : IP Packet Sent based on ARP Reply
+--- --- - Report : IP Packet Sent based on ARP Reply
+--- --- - Report : IP Packet S

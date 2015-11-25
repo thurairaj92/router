@@ -1,0 +1,17 @@
+*.pyc
+*.pyo
+*.py~
+*.py.bak
+old.*
+.*
+*.patch
+*.rej
+*.diff
+*.orig
+*.swp
+\#*\#
+*~
+ext/*
+pox/lib/pxpcap/pxpcap_c/build
+pox/lib/pxpcap/pxpcap_c/WpdPack
+pypy/
