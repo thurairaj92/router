@@ -211,7 +211,6 @@ struct sr_rt* sr_get_routing_entry(struct sr_instance* sr, uint32_t ar_tip, stru
         }
 
         if(loop == 1){
-            printf("Checking addr. \n");
            if((rt_walker->dest.s_addr & rt_walker->mask.s_addr) == (ar_tip & rt_walker->mask.s_addr)){
                 if(longest_prefix_match == NULL){
                     longest_prefix_match = rt_walker;
@@ -229,3 +228,6 @@ struct sr_rt* sr_get_routing_entry(struct sr_instance* sr, uint32_t ar_tip, stru
 
     return longest_prefix_match;
 }
+
+
+

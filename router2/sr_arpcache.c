@@ -19,7 +19,7 @@
 void sr_arpcache_sweepreqs(struct sr_instance *sr) { 
     struct sr_arpreq *req;
     for (req = sr->cache.requests; req != NULL; req = req->next) {
-        printf("Sweepreqs calling handle_arpreq. \n");
+        printf("**********************************\n*Sweepreqs calling handle_arpreq.*\n**********************************\n");
         handle_arpreq(sr,req);
     }
 }
