@@ -175,7 +175,14 @@ struct sr_tcp_hdr
   } __attribute__ ((packed)) ;
 typedef struct sr_tcp_hdr sr_tcp_hdr_t;
 
-
+struct sr_tcp_cksum_hdr {
+  uint32_t  ip_src;
+  uint32_t  ip_dst;
+  uint8_t reserved;
+  uint8_t  ip_p;
+  uint16_t  len;
+} __attribute__ ((packed)) ;
+typedef struct sr_tcp_cksum_hdr sr_tcp_cksum_hdr_t;
 
 
 #define TCP_FIN 0x01  

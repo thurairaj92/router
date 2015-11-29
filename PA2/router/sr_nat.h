@@ -61,7 +61,7 @@ struct sr_nat_mapping {
 struct sr_unsolicited_tcp {
   time_t arrival_time;
   uint32_t src_ip;
-  uint8_t icmp_data[28];
+  uint8_t ip_data[28];
   uint16_t port_val_ext;
 
   struct sr_unsolicited_tcp *next;
