@@ -6,11 +6,39 @@
 #include <time.h>
 #include <pthread.h>
 
+
+
+
+
+
+#define DROP_PACKET 1
+#define PACKET_FINE 0
+
 typedef enum {
   nat_mapping_icmp,
   nat_mapping_tcp
   /* nat_mapping_udp, */
 } sr_nat_mapping_type;
+
+
+typedef enum {
+
+  inbound_packet,
+  outbound_packet,
+  confused_packet
+} packet_direction;
+
+
+typedef enum {
+
+  nat_if,
+  internal_if,
+  external_if,
+  unknown_if
+} interface_map;
+
+
+
 
 struct sr_nat_connection {
   /* add TCP connection state data members here */
@@ -29,10 +57,25 @@ struct sr_nat_mapping {
   struct sr_nat_mapping *next;
 };
 
+
+struct sr_unsolicited_tcp {
+  time_t arrival_time;
+  uint32_t src_ip;
+  uint8_t icmp_data[28];
+  uint16_t port_val_ext;
+
+  struct sr_unsolicited_tcp *next;
+  struct sr_unsolicited_tcp *prev;
+
+
+}
+
 struct sr_nat {
   /* add any fields here */
   struct sr_nat_mapping *mappings;
-
+  struct sr_unsolicited_tcp *unsolicited_tcp;
+  struct sr_instance *sr;
+  uint16_t available_port;
   /* threading */
   pthread_mutex_t lock;
   pthread_mutexattr_t attr;

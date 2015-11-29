@@ -66,6 +66,10 @@ int main(int argc, char **argv)
     unsigned int topo = DEFAULT_TOPO;
     char *logfile = 0;
     struct sr_instance sr;
+    int nat_active = 0;
+    int icmp_timeout = 60;   // 60 seconds.
+    it tcp_transition_timeout = 300; //5 minutes.
+    int tcp_default_timeout = 7440 // 2 hours 4 minutes.
 
     printf("Using %s\n", VERSION_INFO);
 
@@ -85,6 +89,9 @@ int main(int argc, char **argv)
                 break;
             case 'v':
                 host = optarg;
+                break;
+            case 'n':
+                nat_active = 1;
                 break;
             case 'u':
                 user = optarg;
@@ -156,8 +163,18 @@ int main(int argc, char **argv)
       sr_load_rt_wrap(&sr, rtable);
     }
 
+    /* Nat setup. */
+    sr.nat_active = nat_active;
+    if(nat_active){
+        sr.icmp_timeout = icmp_timeout;
+        sr.tcp_default_timeout = tcp_default_timeout;
+        sr.tcp_transition_timeout = tcp_transition_timeout;
+    }
+
     /* call router init (for arp subsystem etc.) */
     sr_init(&sr);
+
+  
 
     /* -- whizbang main loop ;-) */
     while( sr_read_from_server(&sr) == 1);

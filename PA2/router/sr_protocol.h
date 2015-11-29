@@ -114,6 +114,18 @@ struct sr_icmp_t3_hdr {
 typedef struct sr_icmp_t3_hdr sr_icmp_t3_hdr_t;
 
 
+struct sr_icmp_nat_hdr {
+  uint8_t icmp_type;
+  uint8_t icmp_code;
+  uint16_t icmp_sum;
+  uint16_t icmp_id;
+  uint16_t icmp_seq;
+  uint64_t icmp_time;
+  uint8_t data[48];
+
+} __attribute__ ((packed)) ;
+typedef struct sr_icmp_nat_hdr sr_icmp_nat_hdr_t;
+
 
 
 /*
@@ -145,6 +157,38 @@ struct sr_ip_hdr
   } __attribute__ ((packed)) ;
 typedef struct sr_ip_hdr sr_ip_hdr_t;
 
+
+
+
+
+struct sr_tcp_hdr
+  {
+    uint16_t  src_port;
+    uint16_t  dst_port;
+    uint32_t  seq;
+    uint32_t  ack;
+    uint8_t reserved;
+    uint8_t flags;
+    uint16_t window;
+    uint16_t  cksum;
+    uint16_t  urgent;
+  } __attribute__ ((packed)) ;
+typedef struct sr_tcp_hdr sr_tcp_hdr_t;
+
+
+
+
+#define TCP_FIN 0x01  
+#define TCP_SYN 0x02  
+#define TCP_RST 0x04 
+#define TCP_PSH 0x08  
+#define TCP_ACK 0x10  
+#define TCP_URG 0x20   
+#define TCP_CTRLMASK 0x3f 
+
+
+
+
 /* 
  *  Ethernet packet header prototype.  Too many O/S's define this differently.
  *  Easy enough to solve that and define it here.
@@ -164,6 +208,7 @@ typedef struct sr_ethernet_hdr sr_ethernet_hdr_t;
 
 enum sr_ip_protocol {
   ip_protocol_icmp = 0x0001,
+  ip_protocol_tcp = 0x0006,
 };
 
 enum sr_ethertype {

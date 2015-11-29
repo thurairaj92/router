@@ -23,6 +23,7 @@
 #include "sr_protocol.h"
 #include "sr_arpcache.h"
 #include "sr_utils.h"
+#include "sr_nat.h"
 
 
 #define IP_ADDR_LEN 4
@@ -57,6 +58,10 @@ void sr_init(struct sr_instance* sr)
 
 	/* Initialize cache and cache cleanup thread */
 	sr_arpcache_init(&(sr->cache));
+	if(sr.nat_active){
+		sr_nat_init(&(sr->nat));
+		sr->nat.sr = sr;
+	}
 
 	pthread_attr_init(&(sr->attr));
 	pthread_attr_setdetachstate(&(sr->attr), PTHREAD_CREATE_JOINABLE);

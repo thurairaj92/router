@@ -54,6 +54,11 @@ struct sr_instance
     struct sr_rt* routing_table; /* routing table */
     struct sr_arpcache cache;   /* ARP cache */
     pthread_attr_t attr;
+    struct sr_nat nat;
+    int nat_active;
+    int icmp_timeout;
+    int tcp_default_timeout;
+    int tcp_transition_timeout;
     FILE* logfile;
 };
 
