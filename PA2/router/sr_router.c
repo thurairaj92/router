@@ -37,6 +37,10 @@ void create_ip_header(uint8_t *packet, uint16_t ip_len, uint8_t ip_ttl, uint8_t 
 uint8_t *create_icmp_header(uint8_t icmp_type, uint8_t icmp_code, sr_ethernet_hdr_t *ethernet_header, sr_ip_hdr_t *ip_header, struct sr_if* target_interface, 
 	struct sr_arpentry *arp_entry);
 void send_arp_request(struct sr_instance *sr, struct sr_rt *hop_entry, struct sr_if *out_interface);
+void create_icmp_11_header(uint8_t *packet, sr_ip_hdr_t *old_ip);
+void create_icmp_port_header(uint8_t *packet, sr_ip_hdr_t *old_ip);
+void create_icmp_net_header(uint8_t *packet, sr_ip_hdr_t *old_ip);
+void create_icmp_host_header(uint8_t *packet, sr_ip_hdr_t *old_ip);
 
 /*---------------------------------------------------------------------
  * Method: sr_init(void)
@@ -92,7 +96,6 @@ void sr_handlepacket(struct sr_instance* sr,
 	assert(packet);
 	assert(interface);
 
-	printf("\n******** NEW  PACKET ********\n");
 
 	/* fill in code here */
 	struct sr_if* ethernet_interface = sr_get_interface(sr, interface);
@@ -121,7 +124,7 @@ void sr_handlepacket(struct sr_instance* sr,
 			struct sr_if* target_ip_interface = sr_get_ip_interface(sr, arp_header->ar_tip);
 			
 			if (target_ip_interface != 0) {
-				printf("--- --- - Note : Target IP in the Router. \n");
+			
 
 				/*Create Packet with arp and ethernet header. */
 				unsigned int reply_len = sizeof(sr_ethernet_hdr_t) + sizeof(sr_arp_hdr_t);
@@ -130,22 +133,21 @@ void sr_handlepacket(struct sr_instance* sr,
 				create_ethernet_header(reply_packet, ethernet_header->ether_shost,  target_ip_interface->addr,  ethertype_arp);
 
 				if ((sr_send_packet(sr, reply_packet, reply_len, target_ip_interface->name)) == 0) {
-					printf("--- --- - Report : ARP Reply Sent. \n");
+				
 				} else {
-					printf("--- --- - Report : ARP Reply Failed To Send. \n");
+				
 				}
 
-				printf("******* END of Process ******\n");
 				free(reply_packet);
 
 			} else {
-				printf("--- --- - Note : Target IP not for Router \n");
+			
 				printf("******** DROP  PACKET *******\n");
 			}
 			break;
 
-		case arp_op_reply:
-			printf("--- --- ARP Reply.\n");
+		case arp_op_reply:{
+
 
 			struct sr_arpreq *request =  sr_arpcache_insert(&sr->cache,
 			                             arp_header->ar_sha,
@@ -153,12 +155,11 @@ void sr_handlepacket(struct sr_instance* sr,
 
 			if (request != NULL) {
 				struct sr_packet *packet_head = request->packets;
-				printf("--- --- - Note: Begin sending IP packets in queue.\n");
+			
 				while (packet_head != NULL) {
 					sr_ip_hdr_t *ip_header = (sr_ip_hdr_t *) (packet_head->buf + sizeof(sr_ethernet_hdr_t));
-					print_hdrs(packet_head->buf, packet_head->len);
 
-					ip_header->ip_ttl--;
+					/*ip_header->ip_ttl--;*/
 					int new_len = sizeof(sr_ethernet_hdr_t) + ntohs(ip_header->ip_len);
 					uint8_t *packet_new = malloc(new_len);
 
@@ -169,9 +170,9 @@ void sr_handlepacket(struct sr_instance* sr,
 					create_ethernet_header(packet_new, ethernet_header->ether_shost, ethernet_header->ether_dhost, ethertype_ip);
 
 					if ((sr_send_packet(sr, packet_new, new_len, interface)) == 0) {
-						printf("--- --- - Report : IP Packet Sent based on ARP Reply\n");
+					
 					} else {
-						printf("--- --- - Report : IP Packet Failed to send based on ARP Reply\n");
+					
 					}
 
 					free(packet_new);
@@ -182,276 +183,250 @@ void sr_handlepacket(struct sr_instance* sr,
 					}
 
 				}
-				printf("--- --- - Note: End sending IP packets in queue.\n");
+			
 				sr_arpreq_destroy(&sr->cache, request);
 			}
-			printf("******* END of Process ******\n");
 			break;
-
+		}
 		default:
 			printf("No match of arp op code.\n");
 		}
 	}/*END OF ARP SECTION */
 	/*IP Packet*/
-	else if (converted_ether_type_val == ethertype_ip) {
-		printf("--- IP Packet\n");
+	else if (converted_ether_type_val == ethertype_ip){
 
-		/*Get IP header*/
+		struct sr_rt* gateway;
+		struct sr_arpentry *arp_entry;
+		uint8_t *reply_packet;
+		unsigned int packet_len;
+
+		/* Get IP header */
 		sr_ip_hdr_t *ip_header =  (sr_ip_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t));
-		struct sr_if* target_ip_interface = sr_get_ip_interface(sr, ip_header->ip_dst);
 		struct sr_if* target_interface = sr_get_interface(sr, interface);
 
 		/*checksum*/
-		uint16_t ip_cksum = ip_header->ip_sum;
+		uint16_t packet_cksum, calculated_cksum;
+		
+		packet_cksum = ip_header->ip_sum;
 		ip_header->ip_sum = 0;
-		uint16_t in_cksum =  cksum((void *) ip_header, ip_header->ip_hl * BYTE_CONVERSION);
+	
+		calculated_cksum =  cksum((void *) ip_header, ip_header->ip_hl * BYTE_CONVERSION);
+		ip_header->ip_sum = packet_cksum;
 
-		ip_header->ip_sum = in_cksum;
-
-		/*Validate the header*/
-		if (ip_header->ip_hl < 5 || in_cksum != ip_cksum || ip_header->ip_v != BYTE_CONVERSION) {
-			printf("--- --- - Error : IP Checksum\n");
-			printf("******* END of Process ******\n");
+		if (ip_header->ip_hl < 5 || packet_cksum != calculated_cksum || ip_header->ip_v != BYTE_CONVERSION) {
 			return;
 		}
 
-		/*Validate TTL*/
+		/*TTL Check*/
 		if (ip_header->ip_ttl == 0) {
-			printf("--- --- - Note : TTL = 0\n");
-			struct sr_arpentry *arp_entry = sr_arpcache_lookup(&sr->cache, ip_header->ip_src);
-			uint8_t *reply_icmp = create_icmp_header(11, 0, ethernet_header, ip_header, target_interface, arp_entry);
-			unsigned int packet_len = sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_t11_hdr_t);
-
-			if(arp_entry != NULL)
-			{
-				if ((sr_send_packet(sr, reply_icmp, packet_len, interface)) == 0) {
-					printf("--- --- - Report : ICMP Type 11 Sent\n");
-				} else {
-					printf("--- --- - Report : Failed to send ICMP Type 11\n");
-				}
-
-				free(reply_icmp);
+			/*get destination address*/
+			gateway = sr_get_routing_entry(sr, ip_header->ip_src, ethernet_interface);
+			/*Gateway can be empty*/
+			/*Check gateway*/
+			if(gateway == NULL){
+				return;
 			}
-			else{
-				printf("--- --- - Note : Couldn't find MAC in ARP_CACHE\n");
-				printf("--- --- - Note : Try to create ARP Req for Type 11\n");
-				struct sr_arpreq *created_req = sr_arpcache_queuereq(&sr->cache, ip_header->ip_src,
-		                                reply_icmp, packet_len, interface);
+			
+			arp_entry = sr_arpcache_lookup(&sr->cache, gateway->gw.s_addr);
+			
+			unsigned int ip_len = sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_t11_hdr_t);
+			packet_len = sizeof(sr_ethernet_hdr_t) + ip_len;
+
+			reply_packet = malloc(packet_len);
+
+			/*Create ICMP packet*/
+			create_icmp_11_header(reply_packet, ip_header);
+			create_ip_header(reply_packet, ip_len, 100, ip_protocol_icmp, target_interface->ip, ip_header->ip_src);
+
+			if(arp_entry != NULL){
+				create_ethernet_header(reply_packet, arp_entry->mac, ethernet_header->ether_dhost,  ethertype_ip);
+				sr_send_packet(sr, reply_packet, packet_len, interface);
+			}else{
+				create_ethernet_header(reply_packet, (uint8_t *) (EMPTY_MAC),  ethernet_header->ether_dhost,  ethertype_ip);
+				struct sr_arpreq *created_req = sr_arpcache_queuereq(&sr->cache, gateway->gw.s_addr, reply_packet, packet_len, interface);
 				handle_arpreq(sr, created_req);
 			}
-			printf("******* END of Process ******\n");
+
 			return;
 		}
 
-		/*Packet for me, yay! */
-		uint32_t dst_ip = ip_header->ip_dst;
-		if (sr_get_ip_interface(sr, dst_ip) != 0) {
-			printf("--- --- - Note : Packet for Router\n");
-			/*ICMP packet*/
-			if (ip_header->ip_p == 1) {
 
-				/* ICMP checksum check */
+		if (sr_get_ip_interface(sr, ip_header->ip_dst) != 0){
+			/*ICMP*/
+
+			if (ip_header->ip_p == 1) {
 				sr_icmp_hdr_t *icmp_header = (sr_icmp_hdr_t *)(((uint8_t *)ip_header) + ip_header->ip_hl * BYTE_CONVERSION);
+				
+				uint16_t icmp_packet_cksum, icmp_calculate_cksum;
 				uint16_t icmp_len = ntohs(ip_header->ip_len) - ip_header->ip_hl * BYTE_CONVERSION;
 
-				uint16_t icmp_cksum = icmp_header->icmp_sum;
+				icmp_packet_cksum = icmp_header->icmp_sum;
 				icmp_header->icmp_sum = 0;
-				uint16_t in_icmp_cksum =  cksum((void *) icmp_header, icmp_len);
+				icmp_calculate_cksum =  cksum((void *) icmp_header, icmp_len);
 
-				if (icmp_cksum != in_icmp_cksum){
+				if(icmp_packet_cksum != icmp_calculate_cksum){
 					return;
 				}
 
-				struct sr_arpentry *arp_entry = sr_arpcache_lookup(&sr->cache, ip_header->ip_src);
-
-				switch (icmp_header->icmp_type) {
-				case 1:
-					break;
-				case 3:
-					break;
-				case 8:
-				{
-					printf("--- ICMP ECHO Req Packet\n");
-					uint8_t *reply_icmp = create_icmp_header(0, 0, ethernet_header, ip_header, target_interface, arp_entry);
-					unsigned int packet_len = sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) + icmp_len;
-					if(arp_entry != NULL)
-					{
-						if ((sr_send_packet(sr, reply_icmp, packet_len, interface)) == 0) {
-							printf("--- --- - Report : ICMP Type 1 Sent\n");
-						} else {
-							printf("Failed to send the packet.\n");
-						}
-					}
-					else{
-						printf("--- --- - Note : Try to create ARP Req for ICMP Type 0\n");
-						printf("--- --- - Note : Couldn't find MAC in ARP_CACHE\n");
-						struct sr_arpreq *created_req = sr_arpcache_queuereq(&sr->cache, ip_header->ip_src,
-				                                reply_icmp, packet_len, interface);
-						handle_arpreq(sr, created_req);
-
-					}
-					break;
-				}
-				case 11:
-					break;
-				default:
+				packet_len = sizeof(sr_ethernet_hdr_t) + ntohs(ip_header->ip_len);
+				reply_packet = malloc(packet_len);
+				
+				gateway = sr_get_routing_entry(sr, ip_header->ip_src, ethernet_interface);
+				if (gateway == NULL){
 					return;
 				}
-				printf("******* END of Process ******\n");
-			}
-			/*Not ICMP Packet*/
-			else {
 
-				ip_header->ip_ttl--;
-				/*uint8_t *reply_icmp = create_icmp_header(3, 3, ethernet_header, ip_header, target_interface);*/
-				/*unsigned int packet_len = sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_t3_hdr_t);*/
+				sr_ip_hdr_t *reply_ip_header =  (sr_ip_hdr_t *) (reply_packet + sizeof(sr_ethernet_hdr_t));
+				sr_icmp_hdr_t *reply_icmp_header =  (sr_icmp_hdr_t *)(reply_packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
+
+				memcpy((void *)reply_ip_header, (void *)ip_header, ntohs(ip_header->ip_len));
+				reply_ip_header->ip_dst = ip_header->ip_src;
+				reply_ip_header->ip_src = ip_header->ip_dst;
+
+				reply_ip_header->ip_sum = 0;
+				reply_ip_header->ip_sum = cksum((void *) reply_ip_header, reply_ip_header->ip_hl * BYTE_CONVERSION);
+
+				reply_icmp_header->icmp_type = 0;
+				reply_icmp_header->icmp_code = 0;
+				reply_icmp_header->icmp_sum = 0;
+				reply_icmp_header->icmp_sum = cksum((void *) reply_icmp_header, icmp_len);
+
+				arp_entry = sr_arpcache_lookup(&sr->cache, gateway->gw.s_addr);
+				if(arp_entry != NULL){
+					create_ethernet_header(reply_packet, arp_entry->mac, ethernet_header->ether_dhost,  ethertype_ip);
+					sr_send_packet(sr, reply_packet, packet_len, interface);
+				}else{
+					create_ethernet_header(reply_packet, (uint8_t *) (EMPTY_MAC),  ethernet_header->ether_dhost,  ethertype_ip);
+					struct sr_arpreq *created_req = sr_arpcache_queuereq(&sr->cache, gateway->gw.s_addr, reply_packet, packet_len, interface);
+					handle_arpreq(sr, created_req);
+				}
+
+			}else{
+				
+				gateway = sr_get_routing_entry(sr, ip_header->ip_src, ethernet_interface);
+				if(gateway == NULL){
+					return;
+				}
+				
+				arp_entry = sr_arpcache_lookup(&sr->cache, gateway->gw.s_addr);
 
 				uint16_t  ip_len = sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_t3_hdr_t);
-				unsigned int reply_icmp_len = sizeof(sr_ethernet_hdr_t) + ip_len;
+				packet_len = sizeof(sr_ethernet_hdr_t) + ip_len;
 
-				uint8_t *packet = malloc(reply_icmp_len);
+				reply_packet = malloc(packet_len);
+				create_icmp_port_header(reply_packet, ip_header);
+				create_ip_header(reply_packet, ip_len, 100, ip_protocol_icmp, ip_header->ip_dst , ip_header->ip_src);
 
-				sr_icmp_t3_hdr_t *reply_icmp = (sr_icmp_t3_hdr_t *) (packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
-				reply_icmp->icmp_type = 3;
-				reply_icmp->icmp_code = 3;
-				reply_icmp->icmp_sum = 0;
-				reply_icmp->unused = 0;
-				reply_icmp->next_mtu = 1000; /*TODO*/
-
-				memcpy((void *)reply_icmp->data, (void *)(ip_header), sizeof(sr_ip_hdr_t) + 8);
-				reply_icmp->icmp_sum = cksum((void *) reply_icmp, sizeof(sr_icmp_t3_hdr_t));
-
-
-				create_ip_header(packet, ip_len, INITIAL_TTL, ip_protocol_icmp, target_interface->ip, ip_header->ip_src);
-				create_ethernet_header(packet, ethernet_header->ether_shost,  ethernet_header->ether_dhost,  ethertype_ip);
-
-				if ((sr_send_packet(sr, packet, reply_icmp_len, interface)) == 0) {
-					printf("Port Unreachable ICMP successflly. \n");
-				} else {
-					printf("Failed to send the packet.\n");
+				if(arp_entry != NULL){
+					create_ethernet_header(reply_packet, arp_entry->mac, ethernet_header->ether_dhost,  ethertype_ip);
+					sr_send_packet(sr, reply_packet, packet_len, interface);
+				}else{
+					create_ethernet_header(reply_packet, (uint8_t *) (EMPTY_MAC),  ethernet_header->ether_dhost,  ethertype_ip);
+					struct sr_arpreq *created_req = sr_arpcache_queuereq(&sr->cache, gateway->gw.s_addr, reply_packet, packet_len, interface);
+					handle_arpreq(sr, created_req);
 				}
 
-				free(packet);
 				return;
-
-
-				/*struct sr_arpentry *arp_entry = sr_arpcache_lookup(&sr->cache, ip_header->ip_src);
-				uint8_t *reply_icmp = create_icmp_header(3, 3, ethernet_header, ip_header, target_interface, arp_entry);
-				unsigned int packet_len = sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_t3_hdr_t);
-
-				if (arp_entry != NULL){
-					if ((sr_send_packet(sr, reply_icmp, packet_len, interface)) == 0) {
-						printf("--- --- - Report : ICMP Type 3 code 3 Sent\n");
-					} else {
-						printf("--- --- - Report : Failed to send the packet.\n");
-					}
-					free(reply_icmp);
-				}
-				else {
-					printf("--- --- - Note : Try to create ARP Req for ICMP Type 3 Code 3\n");
-					printf("--- --- - Note : Couldn't find MAC in ARP_CACHE\n");
-					struct sr_arpreq *created_req = sr_arpcache_queuereq(&sr->cache, ip_header->ip_src, reply_icmp, packet_len, interface);
-					handle_arpreq(sr, created_req);
-				}
-				printf("******* END of Process ******\n");
-				return;*/
 			}
+		}else{
+			printf("Should be here\n");
+			ip_header->ip_ttl--;
 
-		}
-		/*Not for me*/
-		else {
-			/* Check TTL */
-			printf("--- --- - Note : Packet NOT for Router\n");
-			if (ip_header->ip_ttl <= 1) {
-				printf("--- --- - Note : TTL = 0\n");
-				struct sr_arpentry *arp_entry = sr_arpcache_lookup(&sr->cache, ip_header->ip_src);
-				uint8_t *reply_icmp = create_icmp_header(11, 0, ethernet_header, ip_header, target_interface, arp_entry);
-				unsigned int packet_len = sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_t11_hdr_t);
-
-				if (arp_entry != NULL){
-					if ((sr_send_packet(sr, reply_icmp, packet_len, interface)) == 0) {
-						printf("--- --- - Report : ICMP Type 11 is sent\n");
-					} else {
-						printf("Failed to send the packet.\n");
-					}
-					free(reply_icmp);
+			if (ip_header->ip_ttl < 1) {
+				/*get destination address*/
+				gateway = sr_get_routing_entry(sr, ip_header->ip_src, ethernet_interface);
+				/*Gateway can be empty*/
+				/*Check gateway*/
+				if(gateway == NULL){
+					return;
 				}
-				else {
-					printf("--- --- - Note : Couldn't find MAC in ARP_CACHE\n");
-					printf("--- --- - Note : Try to create ARP Req for Type 11\n");
-					struct sr_arpreq *created_req = sr_arpcache_queuereq(&sr->cache, ip_header->ip_src, reply_icmp, packet_len, interface);
+				
+				arp_entry = sr_arpcache_lookup(&sr->cache, gateway->gw.s_addr);
+				
+				unsigned int ip_len = sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_t11_hdr_t);
+				packet_len = sizeof(sr_ethernet_hdr_t) + ip_len;
+
+				reply_packet = malloc(packet_len);
+
+				/*Create ICMP packet*/
+				create_icmp_11_header(reply_packet, ip_header);
+				create_ip_header(reply_packet, ip_len, 100, ip_protocol_icmp, target_interface->ip, ip_header->ip_src);
+
+				if(arp_entry != NULL){
+					create_ethernet_header(reply_packet, arp_entry->mac, ethernet_header->ether_dhost,  ethertype_ip);
+					sr_send_packet(sr, reply_packet, packet_len, interface);
+				}else{
+					create_ethernet_header(reply_packet, (uint8_t *) (EMPTY_MAC),  ethernet_header->ether_dhost,  ethertype_ip);
+					struct sr_arpreq *created_req = sr_arpcache_queuereq(&sr->cache, gateway->gw.s_addr, reply_packet, packet_len, interface);
 					handle_arpreq(sr, created_req);
 				}
-				printf("******* END of Process ******\n");
+
 				return;
 			}
 
 			struct sr_rt* target_machine_ip = sr_get_routing_entry(sr, ip_header->ip_dst, ethernet_interface);
 
-			/* Non-existant route for the destination ip ; No idea which interface should I use to forward this packet */
 			if (target_machine_ip == 0) {
-				printf("--- --- - Note : Can't find dest address in rtable\n");
-				struct sr_arpentry *arp_entry = sr_arpcache_lookup(&sr->cache, ip_header->ip_src);
-				uint8_t *reply_icmp = create_icmp_header(3, 0, ethernet_header, ip_header, target_interface, arp_entry);
-				unsigned int packet_len = sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_t3_hdr_t);
-
-				if (arp_entry != NULL){
-					if ((sr_send_packet(sr, reply_icmp, packet_len, interface)) == 0) {
-						printf("--- --- - Report : ICMP Type 3 Code 0 is sent\n");
-					} else {
-						printf("Failed to send the packet.\n");
-					}
-					free(reply_icmp);
+				gateway = sr_get_routing_entry(sr, ip_header->ip_src, ethernet_interface);
+				if(gateway == NULL){
+					return;
 				}
-				else {
-					printf("--- --- - Note : Try to create ARP Req for ICMP Type 3\n");
-					struct sr_arpreq *created_req = sr_arpcache_queuereq(&sr->cache, ip_header->ip_src, reply_icmp, packet_len, interface);
+				arp_entry = sr_arpcache_lookup(&sr->cache, gateway->gw.s_addr);
+
+				uint16_t  ip_len = sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_t3_hdr_t);
+				packet_len = sizeof(sr_ethernet_hdr_t) + ip_len;
+
+				reply_packet = malloc(packet_len);
+
+				create_icmp_net_header(reply_packet, ip_header);
+				create_ip_header(reply_packet, ip_len, 100, ip_protocol_icmp, target_interface->ip , ip_header->ip_src);
+
+				if(arp_entry != NULL){
+					create_ethernet_header(reply_packet, arp_entry->mac, ethernet_header->ether_dhost,  ethertype_ip);
+					sr_send_packet(sr, reply_packet, packet_len, interface);
+				}else{
+					create_ethernet_header(reply_packet, (uint8_t *) (EMPTY_MAC),  ethernet_header->ether_dhost,  ethertype_ip);
+					struct sr_arpreq *created_req = sr_arpcache_queuereq(&sr->cache, gateway->gw.s_addr, reply_packet, packet_len, interface);
 					handle_arpreq(sr, created_req);
 				}
-				printf("******* END of Process ******\n");
 				return;
-			}
 
-			/*Everything fine until now, just get me MAC address and the packet is good to go*/
-			struct sr_if* next_hop_interface = sr_get_interface(sr, target_machine_ip->interface);
-			struct sr_arpentry *arp_entry = sr_arpcache_lookup(&sr->cache, target_machine_ip->gw.s_addr);
+			}else{
+				struct sr_if* next_hop_interface = sr_get_interface(sr, target_machine_ip->interface);
+				arp_entry = sr_arpcache_lookup(&sr->cache, target_machine_ip->gw.s_addr);
+				/*struct sr_rt* gateway = sr_get_routing_entry(sr, ip_header->ip_src, ethernet_interface);*/
 
-			/*Found the MAC address, cache is so good!*/
-			if (arp_entry != NULL) {
-				ip_header->ip_ttl--;
 				int new_len = sizeof(sr_ethernet_hdr_t) + ntohs(ip_header->ip_len);
 				uint8_t *packet_new = malloc(new_len);
 
 				ip_header->ip_sum = 0;
-
 				ip_header->ip_sum = cksum((void *) ip_header, ip_header->ip_hl * BYTE_CONVERSION);
+
 				memcpy(packet_new + sizeof(sr_ethernet_hdr_t), ip_header, ntohs(ip_header->ip_len));
 
-				create_ethernet_header(packet_new, arp_entry->mac, next_hop_interface->addr, ethertype_ip);
-
-				if (sr_send_packet(sr, packet_new, new_len, next_hop_interface->name) == 0) {
-					printf("--- --- - Report : Packet is forwarded\n");
-
+				if (arp_entry != NULL) {
+					create_ethernet_header(packet_new, arp_entry->mac, next_hop_interface->addr, ethertype_ip);
+					sr_send_packet(sr, packet_new, new_len, next_hop_interface->name);
 				} else {
-					printf("Failed to forward packet. \n");
+					create_ethernet_header(packet_new, (uint8_t *) (EMPTY_MAC),  ethernet_header->ether_dhost,  ethertype_ip);
+					struct sr_arpreq *created_req = sr_arpcache_queuereq(&sr->cache, target_machine_ip->gw.s_addr,
+					                                packet_new, len, interface);
+					handle_arpreq(sr, created_req);
+					
 				}
+				return;
 
-				free(packet_new);
-				printf("******* END of Process ******\n");
-
-			/*Didn't find the MAC address in cache :( */
-			} else {
-				printf("--- --- - Note : Couldn't find MAC in ARP_CACHE\n");
-				printf("--- --- - Note : Try to create ARP Req for IP\n");
-				struct sr_arpreq *created_req = sr_arpcache_queuereq(&sr->cache, target_machine_ip->gw.s_addr,
-				                                packet, len, interface);
-				handle_arpreq(sr, created_req);
-				printf("******* END of Process ******\n");
 			}
-		}/* end sr_ForwardPacket */
-	}/*END OF IP SECTION */
-
+		}
+	}
 }
+
+
+
+
+
+
+
 
 void create_arp_header(uint8_t *packet, uint8_t *in_sha, uint8_t *out_sha, uint32_t in_ip, uint32_t out_ip, uint16_t op_code) {
 	sr_arp_hdr_t *reply_arp_header = (sr_arp_hdr_t *) (packet + sizeof(sr_ethernet_hdr_t));
@@ -497,101 +472,57 @@ void create_ip_header(uint8_t *packet, uint16_t ip_len, uint8_t ip_ttl, uint8_t 
 }
 
 
-uint8_t *create_icmp_header(uint8_t icmp_type, uint8_t icmp_code, sr_ethernet_hdr_t *ethernet_header, sr_ip_hdr_t *ip_header, 
-	struct sr_if* target_interface, struct sr_arpentry *arp_entry){
+void create_icmp_11_header(uint8_t *packet, sr_ip_hdr_t *old_ip) {
+	sr_icmp_t11_hdr_t *reply_icmp_header = (sr_icmp_t11_hdr_t *) (packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
+	memcpy((void *)reply_icmp_header->data, (void *)(old_ip), sizeof(sr_ip_hdr_t) + 8);
 
-	uint16_t ip_len = 0;
-	uint8_t *packet = NULL;
-	uint8_t *dest_mac = (uint8_t *) (EMPTY_MAC);
 
-	if(arp_entry){
-		dest_mac = arp_entry->mac;
-	}
+	reply_icmp_header->icmp_type = 11;
+	reply_icmp_header->icmp_code = 0;
+	reply_icmp_header->icmp_sum = 0;
+	reply_icmp_header->unused = 0;
 	
-	if (icmp_type == 11) {
-		ip_len = sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_t11_hdr_t);
-		unsigned int reply_icmp_len = sizeof(sr_ethernet_hdr_t) + ip_len;
+	reply_icmp_header->icmp_sum = cksum((void *) reply_icmp_header, sizeof(sr_icmp_t11_hdr_t));
+}
 
-		packet = malloc(reply_icmp_len);
+void create_icmp_port_header(uint8_t *packet, sr_ip_hdr_t *old_ip) {
+	
+	sr_icmp_t3_hdr_t *reply_icmp_header = (sr_icmp_t3_hdr_t *) (packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
+	memcpy((void *)reply_icmp_header->data, (void *)(old_ip), sizeof(sr_ip_hdr_t) + 8);
 
-		sr_icmp_t11_hdr_t *reply_icmp = (sr_icmp_t11_hdr_t *) (packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
-		reply_icmp->icmp_type = icmp_type;
-		reply_icmp->icmp_code = icmp_code;
-		reply_icmp->icmp_sum = 0;
-		reply_icmp->unused = 0;
+	reply_icmp_header->icmp_type = 3;
+	reply_icmp_header->icmp_code = 3;
+	reply_icmp_header->icmp_sum = 0;
+	reply_icmp_header->unused = 0;
+	reply_icmp_header->next_mtu = 1000; 
+	reply_icmp_header->icmp_sum = cksum((void *) reply_icmp_header, sizeof(sr_icmp_t3_hdr_t));
+}
 
-		memcpy((void *)reply_icmp->data, (void *)(ip_header), sizeof(sr_ip_hdr_t) + 8);
-		reply_icmp->icmp_sum = cksum((void *) reply_icmp, sizeof(sr_icmp_t11_hdr_t));
-	}
+void create_icmp_net_header(uint8_t *packet, sr_ip_hdr_t *old_ip) {
+	
+	sr_icmp_t3_hdr_t *reply_icmp_header = (sr_icmp_t3_hdr_t *) (packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
+	memcpy((void *)reply_icmp_header->data, (void *)(old_ip), sizeof(sr_ip_hdr_t) + 8);
 
-	else if (icmp_type == 0){
-		/* TODO */
-		uint16_t icmp_len = ntohs(ip_header->ip_len) - ip_header->ip_hl * BYTE_CONVERSION;
-		ip_len = sizeof(sr_ip_hdr_t) + icmp_len;
-		unsigned int reply_icmp_len = sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) + icmp_len;
-		packet = malloc(reply_icmp_len);
+	reply_icmp_header->icmp_type = 3;
+	reply_icmp_header->icmp_code = 0;
+	reply_icmp_header->icmp_sum = 0;
+	reply_icmp_header->unused = 0;
+	reply_icmp_header->next_mtu = 1000; 
+	reply_icmp_header->icmp_sum = cksum((void *) reply_icmp_header, sizeof(sr_icmp_t3_hdr_t));
+}
 
-		sr_icmp_hdr_t *echo_request_header = (sr_icmp_hdr_t *)(((uint8_t *)ip_header) + ip_header->ip_hl * BYTE_CONVERSION);
-		sr_icmp_hdr_t *reply_icmp = (sr_icmp_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
-		sr_ip_hdr_t *reply_ip = (sr_ip_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t));
 
-		memcpy(reply_icmp, echo_request_header, icmp_len);
-		reply_icmp->icmp_type = icmp_type;
-		reply_icmp->icmp_sum = icmp_code;
-		reply_icmp->icmp_sum = cksum((void *) reply_icmp, icmp_len);
+void create_icmp_host_header(uint8_t *packet, sr_ip_hdr_t *old_ip) {
+	
+	sr_icmp_t3_hdr_t *reply_icmp_header = (sr_icmp_t3_hdr_t *) (packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
+	memcpy((void *)reply_icmp_header->data, (void *)(old_ip), sizeof(sr_ip_hdr_t) + 8);
 
-		memcpy(reply_ip, ip_header,  ip_header->ip_hl * BYTE_CONVERSION);
-
-		uint32_t ip_dst = ip_header->ip_dst;
-		reply_ip->ip_src = ip_dst;
-		reply_ip->ip_dst = ip_header->ip_src;
-		
-		create_ethernet_header(packet, dest_mac,  ethernet_header->ether_dhost,  ethertype_ip);
-		return packet;
-	}
-	else if (icmp_type == 3 && icmp_code != 1) {
-
-		ip_len = sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_t3_hdr_t);
-		unsigned int reply_icmp_len = sizeof(sr_ethernet_hdr_t) + ip_len;
-
-		packet = malloc(reply_icmp_len);
-
-		sr_icmp_t3_hdr_t *reply_icmp = (sr_icmp_t3_hdr_t *) (packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
-		reply_icmp->icmp_type = icmp_type;
-		reply_icmp->icmp_code = icmp_code;
-		reply_icmp->icmp_sum = 0;
-		reply_icmp->unused = 0;
-		reply_icmp->next_mtu = 1000; /*TODO*/
-
-		memcpy((void *)reply_icmp->data, (void *)(ip_header), sizeof(sr_ip_hdr_t) + 8);
-		reply_icmp->icmp_sum = cksum((void *) reply_icmp, sizeof(sr_icmp_t3_hdr_t));
-	}
-	else if (icmp_type == 3 && icmp_code == 1) {
-
-		ip_len = sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_t3_hdr_t);
-		unsigned int reply_icmp_len = sizeof(sr_ethernet_hdr_t) + ip_len;
-
-		packet = malloc(reply_icmp_len);
-
-		sr_icmp_t3_hdr_t *reply_icmp = (sr_icmp_t3_hdr_t *) (packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
-		reply_icmp->icmp_type = icmp_type;
-		reply_icmp->icmp_code = icmp_code;
-		reply_icmp->icmp_sum = 0;
-		reply_icmp->unused = 0;
-		reply_icmp->next_mtu = 1000; /*TODO*/
-
-		memcpy((void *)reply_icmp->data, (void *)(ip_header), sizeof(sr_ip_hdr_t) + 8);
-		reply_icmp->icmp_sum = cksum((void *) reply_icmp, sizeof(sr_icmp_t3_hdr_t));
-
-		/* Might be the problem too!! */
-		create_ip_header(packet, ip_len, INITIAL_TTL, ip_protocol_icmp, ip_header->ip_dst, ip_header->ip_src);
-		create_ethernet_header(packet, dest_mac,  ethernet_header->ether_dhost,  ethertype_ip);
-		return packet;
-	}
-
-	create_ip_header(packet, ip_len, INITIAL_TTL, ip_protocol_icmp, target_interface->ip, ip_header->ip_src);
-	create_ethernet_header(packet, dest_mac,  ethernet_header->ether_dhost,  ethertype_ip);
-	return packet;
+	reply_icmp_header->icmp_type = 3;
+	reply_icmp_header->icmp_code = 1;
+	reply_icmp_header->icmp_sum = 0;
+	reply_icmp_header->unused = 0;
+	reply_icmp_header->next_mtu = 1000; 
+	reply_icmp_header->icmp_sum = cksum((void *) reply_icmp_header, sizeof(sr_icmp_t3_hdr_t));
 }
 
 void send_arp_request(struct sr_instance *sr, struct sr_rt *hop_entry, struct sr_if *out_interface) {
@@ -604,9 +535,9 @@ void send_arp_request(struct sr_instance *sr, struct sr_rt *hop_entry, struct sr
 	create_ethernet_header(packet, (uint8_t *) (EMPTY_MAC), out_interface->addr,  ethertype_arp);
 
 	if ((sr_send_packet(sr, packet, length, out_interface->name)) == 0) {
-		printf("--- --- Report : ARP REQUEST Sent. \n");
+		
 	} else {
-		printf("Failed to send ARP REQUEST packet.\n");
+		
 	}
 
 	free(packet);
@@ -622,32 +553,42 @@ void handle_arpreq(struct sr_instance *sr, struct sr_arpreq *req) {
 	sr_ip_hdr_t *ip_header = NULL;
 	unsigned int packet_len = 0;
 
-	if (difftime(now, req->sent) >= 1.0) {
+	if (difftime(now, req->sent) > 1.0) {
 		/* I'm tired of waiting for your address, screw you, delete all yours! */
 		if (req->times_sent >= 5) {
-			printf("--- --- - Note : Same ARP Req for 5th Time \n");
+		
 			struct sr_packet *packet_head = req->packets;
-			printf("--- --- - Note : Start loop \n");
+		
 			while (packet_head != NULL) {
-				target_interface = sr_get_interface(sr, packet_head->iface);
 				ip_header =  (sr_ip_hdr_t *)(packet_head->buf + sizeof(sr_ethernet_hdr_t));
-				packet_len = sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_t3_hdr_t);
+
+				target_interface = sr_get_interface(sr, packet_head->iface);
+				struct sr_rt* target_machine_ip = sr_get_routing_entry(sr, ip_header->ip_src, target_interface);
+
+
 				
-				struct sr_arpentry *arp_entry = sr_arpcache_lookup(&sr->cache, ip_header->ip_src);
-				uint8_t *reply_icmp = create_icmp_header(3, 1, (sr_ethernet_hdr_t *)packet_head->buf, ip_header, target_interface, arp_entry);
+				uint16_t  ip_len = sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_t3_hdr_t);
+				packet_len = sizeof(sr_ethernet_hdr_t) + ip_len;
+
+				uint8_t *reply_packet = malloc(packet_len);
+
+				create_icmp_host_header(reply_packet, ip_header);
+				create_ip_header(reply_packet, ip_len, 100, ip_protocol_icmp, target_interface->ip, ip_header->ip_src);
+
+				struct sr_if* next_hop_interface = sr_get_interface(sr, target_machine_ip->interface);
+				struct sr_arpentry *arp_entry = sr_arpcache_lookup(&sr->cache, target_machine_ip->gw.s_addr);
+
 
 				if (arp_entry != NULL){
-					if ((sr_send_packet(sr, reply_icmp, packet_len, packet_head->iface)) == 0) {
-						printf("--- --- - Report : ICMP Type 3 Code 1 is sent\n");
+					create_ethernet_header(reply_packet, arp_entry->mac, next_hop_interface->addr,  ethertype_ip);
+					if ((sr_send_packet(sr, reply_packet, packet_len, packet_head->iface)) == 0) {
+					
 					} else {
 						printf("Failed to send ICMP Unreachable to host in handle_arpreq.\n");
 					}
-					free(reply_icmp);
 				}
 				else {
-					printf("--- --- - Note : Try to create ARP Req for ICMP 3 Code 1\n");
-					printf("--- --- - Note : Couldn't find MAC in ARP_CACHE\n");
-					struct sr_arpreq *created_req = sr_arpcache_queuereq(&sr->cache, ip_header->ip_src, reply_icmp, packet_len, packet_head->iface);
+					struct sr_arpreq *created_req = sr_arpcache_queuereq(&sr->cache, target_machine_ip->gw.s_addr, reply_packet, packet_len, packet_head->iface);
 					handle_arpreq(sr, created_req);
 				}
 
@@ -658,9 +599,9 @@ void handle_arpreq(struct sr_instance *sr, struct sr_arpreq *req) {
 				}
 			}
 			sr_arpreq_destroy(&sr->cache, req);
-			printf("--- --- - Report : Waiting packets cleared\n");
+		
 		} else {
-			printf("--- --- - Note : ARP Req Preps \n");
+		
 
 			ip_header =  (sr_ip_hdr_t *)(req->packets->buf + sizeof(sr_ethernet_hdr_t));
       		struct sr_rt* target_machine_ip = sr_get_routing_entry(sr, ip_header->ip_dst, NULL);

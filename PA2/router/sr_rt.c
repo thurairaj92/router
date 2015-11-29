@@ -203,12 +203,18 @@ struct sr_rt* sr_get_routing_entry(struct sr_instance* sr, uint32_t ar_tip, stru
     while(rt_walker)
     {
        
+        /*print_addr_ip_int( rt_walker->dest.s_addr);*/
+        
         int loop = 0;
         if((interface != NULL) && (strcmp(interface->name, rt_walker->interface) != 0)){
             loop = 1;
         } else if(interface == NULL){
             loop = 1;
         }
+
+        /* Dumb fix*/
+        loop = 1;
+
 
         if(loop == 1){
            if((rt_walker->dest.s_addr & rt_walker->mask.s_addr) == (ar_tip & rt_walker->mask.s_addr)){
