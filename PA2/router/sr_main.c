@@ -67,9 +67,9 @@ int main(int argc, char **argv)
     char *logfile = 0;
     struct sr_instance sr;
     int nat_active = 0;
-    int icmp_timeout = 60;   // 60 seconds.
-    it tcp_transition_timeout = 300; //5 minutes.
-    int tcp_default_timeout = 7440 // 2 hours 4 minutes.
+    int icmp_timeout = 60;   /*// 60 seconds.*/
+    int tcp_transition_timeout = 300; /*//5 minutes.*/
+    int tcp_default_timeout = 7440; /*// 2 hours 4 minutes.*/
 
     printf("Using %s\n", VERSION_INFO);
 

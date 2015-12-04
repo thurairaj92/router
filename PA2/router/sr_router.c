@@ -11,10 +11,7 @@
  *
  **********************************************************************/
 
-#include <stdio.h>
-#include <assert.h>
-#include <stdlib.h>
-#include <string.h>
+
 
 
 #include "sr_if.h"
@@ -23,7 +20,6 @@
 #include "sr_protocol.h"
 #include "sr_arpcache.h"
 #include "sr_utils.h"
-#include "sr_nat.h"
 
 
 #define IP_ADDR_LEN 4
@@ -58,9 +54,10 @@ void sr_init(struct sr_instance* sr)
 
 	/* Initialize cache and cache cleanup thread */
 	sr_arpcache_init(&(sr->cache));
-	if(sr.nat_active){
+	if(sr->nat_active){
 		sr_nat_init(&(sr->nat));
-		sr->nat.sr = sr;
+		sr->nat.ext_if = sr_get_interface(sr, "eth2");
+		sr->nat.int_if =sr_get_interface(sr, "eth1"); 
 	}
 
 	pthread_attr_init(&(sr->attr));
@@ -205,8 +202,23 @@ void sr_handlepacket(struct sr_instance* sr,
 		uint8_t *reply_packet;
 		unsigned int packet_len;
 
+
+		
 		/* Get IP header */
 		sr_ip_hdr_t *ip_header =  (sr_ip_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t));
+
+
+		unsigned int tcp_len = len - sizeof(sr_ethernet_hdr_t);
+		int bad_packet = transform_packet(sr, (uint8_t *)ip_header, tcp_len);
+
+
+		print_hdrs(packet,len);
+
+		if(bad_packet != PACKET_FINE){
+			printf("Bad Packet\n");
+			return;
+		}
+
 		struct sr_if* target_interface = sr_get_interface(sr, interface);
 
 		/*checksum*/
@@ -258,6 +270,7 @@ void sr_handlepacket(struct sr_instance* sr,
 
 		if (sr_get_ip_interface(sr, ip_header->ip_dst) != 0){
 			/*ICMP*/
+			printf("Packet for me\n");
 
 			if (ip_header->ip_p == 1) {
 				sr_icmp_hdr_t *icmp_header = (sr_icmp_hdr_t *)(((uint8_t *)ip_header) + ip_header->ip_hl * BYTE_CONVERSION);
@@ -334,7 +347,7 @@ void sr_handlepacket(struct sr_instance* sr,
 				return;
 			}
 		}else{
-			printf("Should be here\n");
+			printf("Packet for others\n");
 			ip_header->ip_ttl--;
 
 			if (ip_header->ip_ttl < 1) {

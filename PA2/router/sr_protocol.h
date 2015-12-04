@@ -76,6 +76,14 @@
 #endif
 #define ICMP_DATA_SIZE 28
 
+#define TCP_FIN_FLAG 0x01
+#define TCP_SYN_FLAG 0x02
+#define TH_RST 0x04
+#define TH_PUSH 0x08
+#define TH_ACK 0x10
+#define TH_URG 0x20
+#define TH_ECE 0x40
+#define TH_CWR 0x80
 
 /* Structure of a ICMP header
  */

@@ -9,13 +9,7 @@
 #ifndef SR_ROUTER_H
 #define SR_ROUTER_H
 
-#include <netinet/in.h>
-#include <sys/time.h>
-#include <stdio.h>
-
-
-#include "sr_protocol.h"
-#include "sr_arpcache.h"
+#include "sr_nat.h"
 
 /* we dont like this debug , but what to do for varargs ? */
 #ifdef _DEBUG_
@@ -42,25 +36,6 @@ struct sr_rt;
  *
  * -------------------------------------------------------------------------- */
 
-struct sr_instance
-{
-    int  sockfd;   /* socket to server */
-    char user[32]; /* user name */
-    char host[32]; /* host name */ 
-    char template[30]; /* template name if any */
-    unsigned short topo_id;
-    struct sockaddr_in sr_addr; /* address to server */
-    struct sr_if* if_list; /* list of interfaces */
-    struct sr_rt* routing_table; /* routing table */
-    struct sr_arpcache cache;   /* ARP cache */
-    pthread_attr_t attr;
-    struct sr_nat nat;
-    int nat_active;
-    int icmp_timeout;
-    int tcp_default_timeout;
-    int tcp_transition_timeout;
-    FILE* logfile;
-};
 
 /* -- sr_main.c -- */
 int sr_verify_routing_table(struct sr_instance* sr);
