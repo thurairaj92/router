@@ -19,6 +19,9 @@
 
 #define DROP_PACKET 1
 #define PACKET_FINE 0
+#define TCP_DEFAULT_TIMEOUT 7440
+#define TCP_TRANSITION_TIMEOUT 300
+#define ICMP_TIMEOUT 60
 
 
 typedef enum {
@@ -61,6 +64,8 @@ struct sr_nat_connection {
 	int server_ip;
 	int server_port;
 
+  time_t last_updated; 
+
 	struct sr_nat_connection *prev;
   	struct sr_nat_connection *next;
 };
@@ -81,7 +86,6 @@ struct sr_nat_mapping {
 struct sr_unsolicited_tcp {
   time_t arrival_time;
   uint32_t src_ip;
-  uint8_t ip_data[28];
   uint16_t port_val_ext;
 
   struct sr_unsolicited_tcp *next;
@@ -93,6 +97,9 @@ struct sr_nat {
   struct sr_nat_mapping *mappings;
   struct sr_unsolicited_tcp *unsolicited_tcp;
   uint16_t available_port;
+  int icmp_timeout;
+  int tcp_default_timeout;
+  int tcp_transition_timeout;
 
   struct sr_if* ext_if;
   struct sr_if* int_if;
@@ -139,9 +146,6 @@ struct sr_instance
     pthread_attr_t attr;
     struct sr_nat nat;
     int nat_active;
-    int icmp_timeout;
-    int tcp_default_timeout;
-    int tcp_transition_timeout;
     FILE* logfile;
 };
 

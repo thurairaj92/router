@@ -139,6 +139,90 @@ int sr_nat_destroy(struct sr_nat *nat) {  /* Destroys the nat (free memory) */
 		pthread_mutexattr_destroy(&(nat->attr));
 }
 
+void nat_mapping_timeout(void *nat_ptr){
+   struct sr_nat *nat_instance = (struct sr_nat *)nat_ptr;
+    time_t present = time(NULL);
+
+    struct sr_nat_mapping *mapping_list = nat_instance->mappings;
+
+    struct sr_nat_mapping *to_free = NULL:
+    while(mapping_list != NULL){
+      double time_diff = difftime(present,mapping_list->last_updated);
+
+      if(mapping_list->type == nat_mapping_icmp){
+        if(time_diff >= ICMP_TIMEOUT){
+          if(mapping_list->next){
+            mapping_list->next->prev = mapping_list->prev;
+          }
+          if(mapping_list->prev){
+            mapping_list->prev->next = mapping_list->next;
+          } else{
+            nat_instance->mappings = mapping_list->next;
+          }
+          to_free = mapping_list;
+        }
+        
+
+      } else if(mapping_list->type == nat_mapping_tcp){
+        struct sr_nat_connection *conns = mapping_list->conns;
+        while(conns != NULL){
+          int connection_type = 0;
+          if(conns->server_fin && conns->client_fin){
+             connection_type = 1;
+          }
+
+          double time_diff = difftime(present,conns->last_updated);
+          int connection_remove = 0;
+
+          if(connection_type == 0){
+            if(time_diff > TCP_TRANSITION_TIMEOUT){
+              connection_remove = 1;
+            }
+          } else {
+            if(time_diff > TCP_DEFAULT_TIMEOUT){
+              connection_remove = 1;
+            }
+          }
+
+          struct sr_nat_connection *to_free = NULL:
+          if(connection_remove){
+              if(conns->next){
+                conns->next->prev = conns->prev;
+              }
+              if(conns->prev){
+                conns->prev->next = conns->next;
+              } else{
+                mapping_list->conns = conns->next;
+              }
+              to_free = conns;
+          }
+          conns = conns->next;
+            if(to_free){
+              free(to_free);
+            }
+        }
+
+        if(mapping_list->conns == NULL){
+          if(mapping_list->next){
+            mapping_list->next->prev = mapping_list->prev;
+          }
+          if(mapping_list->prev){
+            mapping_list->prev->next = mapping_list->next;
+          } else{
+            nat_instance->mappings = mapping_list->next;
+          }
+          to_free = mapping_list;
+        }  
+      }
+
+      mapping_list = mapping_list->next;
+      if(to_free){
+          free(to_free);
+      }
+    }
+
+}
+
 
 int transform_inbound_packet(struct sr_instance *sr, uint8_t *packet, unsigned int len){
 	printf("--------------Before---------------\n");
@@ -201,7 +285,6 @@ int transform_inbound_packet(struct sr_instance *sr, uint8_t *packet, unsigned i
 					/*Insert the unsolicited SYN.*/
 					struct sr_unsolicited_tcp *new_tcp = (struct sr_unsolicited_tcp *)malloc(sizeof(struct sr_unsolicited_tcp));
 					new_tcp->port_val_ext = port_val;
-					memcpy(new_tcp->ip_data,ip_header,28);
 					new_tcp->src_ip = ip_header->ip_src;
 					new_tcp->arrival_time = time(NULL);
 
@@ -381,6 +464,7 @@ void tcp_handling(struct sr_instance *sr, uint8_t *packet, packet_direction pack
 		client_ip =  ip_header->ip_src;
 		packet_mapping = sr_nat_tcp_lookup_internal(&(sr->nat), client_ip, client_port, nat_mapping_tcp);
 	}else{
+    pthread_mutex_unlock(&(nat->lock));
 		return;
 	}
 
@@ -411,7 +495,7 @@ void tcp_handling(struct sr_instance *sr, uint8_t *packet, packet_direction pack
 		fprintf(stderr, "%d\n" , tcps->port_val_ext);
 		fprintf(stderr, "port printed\n");
 		
-		if(tcps->src_ip == ip_header->ip_dst && tcps->port_val_ext == tcp_hdr->dst_port){
+		if(tcps->src_ip == server_ip && tcps->port_val_ext == server_port){
 			fprintf(stderr, "Match found\n");
 			if(tcps->prev){
 				tcps->prev->next = tcps->next;
@@ -542,6 +626,44 @@ void *sr_nat_timeout(void *nat_ptr) {  /* Periodic Timout handling */
     pthread_mutex_lock(&(nat->lock));
 
     /* handle periodic tasks here */
+    nat_mapping_timeout(nat_ptr);
+    time_t present = time(NULL);
+
+    //*Add Unsolicited Timeout.
+    struct sr_unsolicited_tcp *unsolicited_tcp = nat->unsolicited_tcp;
+    while(unsolicited_tcp != NULL){
+      double time_diff = difftime(present,unsolicited_tcp->arrival_time)
+      struct sr_unsolicited_tcp *to_free = NULL;
+
+      if(time_diff > 6){
+        //Send ICMP error.
+
+
+
+
+
+        
+         if(unsolicited_tcp->next){
+            unsolicited_tcp->next->prev = unsolicited_tcp->prev;
+          }
+          if(unsolicited_tcp->prev){
+            unsolicited_tcp->prev->next = unsolicited_tcp->next;
+          } else{
+            unsolicited_tcp->conns = unsolicited_tcp->next;
+          }
+          to_free = unsolicited_tcp;
+
+
+
+      }
+      unsolicited_tcp = unsolicited_tcp->next;
+      if(to_free){
+        free(to_free);
+      }
+
+
+    }
+
 
     pthread_mutex_unlock(&(nat->lock));
   }
@@ -607,7 +729,7 @@ struct sr_nat_mapping *sr_nat_tcp_lookup_external(struct sr_nat *nat,
 	struct sr_nat_mapping *mappings = nat->mappings;
 	while(mappings != NULL){
 		if(mappings->aux_ext == aux_ext){
-		  mappings->last_updated = time(NULL);
+		  //mappings->last_updated = time(NULL);
 		  break;
 		}
 		mappings = mappings->next;
@@ -667,7 +789,7 @@ struct sr_nat_mapping *sr_nat_tcp_lookup_internal(struct sr_nat *nat,
 		fprintf(stderr, "Mapping\n");
 		if(mappings->ip_int == ip_int && mappings->aux_int == aux_int && mappings->type){
 			fprintf(stderr, "Mapping found\n");
-			mappings->last_updated = time(NULL);
+			//mappings->last_updated = time(NULL);
 			return mappings;
 		}
 		mappings = mappings->next;

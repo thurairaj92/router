@@ -165,12 +165,7 @@ int main(int argc, char **argv)
 
     /* Nat setup. */
     sr.nat_active = nat_active;
-    if(nat_active){
-        sr.icmp_timeout = icmp_timeout;
-        sr.tcp_default_timeout = tcp_default_timeout;
-        sr.tcp_transition_timeout = tcp_transition_timeout;
-    }
-
+    
     /* call router init (for arp subsystem etc.) */
     sr_init(&sr);
 
