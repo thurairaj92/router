@@ -55,8 +55,8 @@ struct sr_nat_connection {
 	int server_fin;
 	int client_fin;
 
-	int syn_ack;
-	int fin_ack;
+	long fin_ack_seq;
+	long fin_last_ack;
 
 	int server_ip;
 	int server_port;

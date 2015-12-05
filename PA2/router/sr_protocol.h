@@ -80,7 +80,7 @@
 #define TCP_SYN_FLAG 0x02
 #define TH_RST 0x04
 #define TH_PUSH 0x08
-#define TH_ACK 0x10
+#define TCP_SYN_ACK 0x10
 #define TH_URG 0x20
 #define TH_ECE 0x40
 #define TH_CWR 0x80
@@ -200,9 +200,6 @@ typedef struct sr_tcp_cksum_hdr sr_tcp_cksum_hdr_t;
 #define TCP_ACK 0x10  
 #define TCP_URG 0x20   
 #define TCP_CTRLMASK 0x3f 
-
-
-
 
 /* 
  *  Ethernet packet header prototype.  Too many O/S's define this differently.

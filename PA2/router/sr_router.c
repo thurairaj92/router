@@ -114,13 +114,13 @@ void sr_handlepacket(struct sr_instance* sr,
 
 	/*ARP Packet*/
 	if (converted_ether_type_val == ethertype_arp) {
-		printf("--- ARP Packet\n");
+		printf("\n");
 		sr_arp_hdr_t *arp_header =  (sr_arp_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t));
 
 		unsigned short converted_arp_op_val = ntohs(arp_header->ar_op);
 		switch (converted_arp_op_val) {
 		case arp_op_request:
-			printf("--- --- ARP Request.\n");
+			printf("\n");
 
 			/*Find out if target IP addr is one of our router's addresses. */
 			struct sr_if* target_ip_interface = sr_get_ip_interface(sr, arp_header->ar_tip);
@@ -210,9 +210,6 @@ void sr_handlepacket(struct sr_instance* sr,
 
 		unsigned int tcp_len = len - sizeof(sr_ethernet_hdr_t);
 		int bad_packet = transform_packet(sr, (uint8_t *)ip_header, tcp_len);
-
-
-		print_hdrs(packet,len);
 
 		if(bad_packet != PACKET_FINE){
 			printf("Bad Packet\n");
