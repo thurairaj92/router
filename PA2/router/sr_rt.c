@@ -212,9 +212,6 @@ struct sr_rt* sr_get_routing_entry(struct sr_instance* sr, uint32_t ar_tip, stru
             loop = 1;
         }
 
-        /* Dumb fix*/
-        loop = 1;
-
 
         if(loop == 1){
            if((rt_walker->dest.s_addr & rt_walker->mask.s_addr) == (ar_tip & rt_walker->mask.s_addr)){

@@ -67,13 +67,12 @@ int main(int argc, char **argv)
     char *logfile = 0;
     struct sr_instance sr;
     int nat_active = 0;
-    int icmp_timeout = 60;   /*// 60 seconds.*/
-    int tcp_transition_timeout = 300; /*//5 minutes.*/
-    int tcp_default_timeout = 7440; /*// 2 hours 4 minutes.*/
+    int icmp_time = 60;
+
 
     printf("Using %s\n", VERSION_INFO);
 
-    while ((c = getopt(argc, argv, "hs:v:p:u:t:r:l:T:")) != EOF)
+    while ((c = getopt(argc, argv, "hs:v:ns:I:p:u:t:r:l:T:")) != EOF)
     {
         switch (c)
         {
@@ -92,6 +91,10 @@ int main(int argc, char **argv)
                 break;
             case 'n':
                 nat_active = 1;
+                fprintf(stderr, "Main nat %d\n", nat_active);
+                break;
+            case 'I':
+                icmp_time = atoi((char *) optarg);;
                 break;
             case 'u':
                 user = optarg;
@@ -165,10 +168,11 @@ int main(int argc, char **argv)
 
     /* Nat setup. */
     sr.nat_active = nat_active;
+
     
     /* call router init (for arp subsystem etc.) */
     sr_init(&sr);
-
+    sr.nat.icmp_timeout = icmp_time;
   
 
     /* -- whizbang main loop ;-) */

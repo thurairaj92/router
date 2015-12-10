@@ -16,9 +16,11 @@
 
 #include "sr_protocol.h"
 #include "sr_arpcache.h"
+#include "sr_router.h"
 
 #define DROP_PACKET 1
 #define PACKET_FINE 0
+#define BYTE_CONVERSION 4
 #define TCP_DEFAULT_TIMEOUT 7440
 #define TCP_TRANSITION_TIMEOUT 300
 #define ICMP_TIMEOUT 60
@@ -52,22 +54,30 @@ typedef enum {
 
 struct sr_nat_connection {
   	/* add TCP connection state data members here */	
-	int server_syn;
-	int client_syn;
+	uint32_t server_syn;
+	uint32_t client_syn;
 
-	int server_fin;
-	int client_fin;
+	uint32_t server_fin;
+	uint32_t client_fin;
 
-	long fin_ack_seq;
-	long fin_last_ack;
+	uint32_t server_fin_ack;
+	uint32_t client_fin_ack;
+
+	uint32_t server_fins_ack;
+	uint32_t client_fins_ack;
+
+	int client_fin_set;
+	int server_fin_set;
 
 	int server_ip;
 	int server_port;
 
-  time_t last_updated; 
+  	time_t last_updated; 
 
 	struct sr_nat_connection *prev;
   	struct sr_nat_connection *next;
+
+  	
 };
 
 struct sr_nat_mapping {
@@ -87,6 +97,9 @@ struct sr_unsolicited_tcp {
   time_t arrival_time;
   uint32_t src_ip;
   uint16_t port_val_ext;
+  void *ip_header;
+
+  /*We need the ip packet*/ 
 
   struct sr_unsolicited_tcp *next;
   struct sr_unsolicited_tcp *prev;
@@ -100,9 +113,12 @@ struct sr_nat {
   int icmp_timeout;
   int tcp_default_timeout;
   int tcp_transition_timeout;
+  struct sr_instance *sr;
 
   struct sr_if* ext_if;
   struct sr_if* int_if;
+
+
   /* threading */
   pthread_mutex_t lock;
   pthread_mutexattr_t attr;
@@ -130,6 +146,7 @@ struct sr_nat_mapping *sr_nat_lookup_internal(struct sr_nat *nat,
 struct sr_nat_mapping *sr_nat_insert_mapping(struct sr_nat *nat,
 uint32_t ip_int,uint32_t ip_ext, uint16_t aux_int, sr_nat_mapping_type type );
 int transform_packet(struct sr_instance *sr, uint8_t *packet, unsigned int len);
+void print_addr_ip_normal(uint32_t ip);
 
 
 struct sr_instance
@@ -147,6 +164,8 @@ struct sr_instance
     struct sr_nat nat;
     int nat_active;
     FILE* logfile;
+
+
 };
 
 

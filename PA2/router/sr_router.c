@@ -22,22 +22,9 @@
 #include "sr_utils.h"
 
 
-#define IP_ADDR_LEN 4
-#define INITIAL_TTL 64
-#define BYTE_CONVERSION 4
-#define EMPTY_MAC "\xff\xff\xff\xff\xff\xff"
 
 
-void create_arp_header(uint8_t *packet, uint8_t *in_sha, uint8_t *out_sha, uint32_t in_ip, uint32_t out_ip, uint16_t op_code);
-void create_ethernet_header(uint8_t *packet, uint8_t *out_host, uint8_t *in_host, uint16_t eth_type);
-void create_ip_header(uint8_t *packet, uint16_t ip_len, uint8_t ip_ttl, uint8_t ip_p, uint32_t ip_src, uint32_t ip_dst);
-uint8_t *create_icmp_header(uint8_t icmp_type, uint8_t icmp_code, sr_ethernet_hdr_t *ethernet_header, sr_ip_hdr_t *ip_header, struct sr_if* target_interface, 
-	struct sr_arpentry *arp_entry);
-void send_arp_request(struct sr_instance *sr, struct sr_rt *hop_entry, struct sr_if *out_interface);
-void create_icmp_11_header(uint8_t *packet, sr_ip_hdr_t *old_ip);
-void create_icmp_port_header(uint8_t *packet, sr_ip_hdr_t *old_ip);
-void create_icmp_net_header(uint8_t *packet, sr_ip_hdr_t *old_ip);
-void create_icmp_host_header(uint8_t *packet, sr_ip_hdr_t *old_ip);
+
 
 /*---------------------------------------------------------------------
  * Method: sr_init(void)
@@ -49,15 +36,19 @@ void create_icmp_host_header(uint8_t *packet, sr_ip_hdr_t *old_ip);
 
 void sr_init(struct sr_instance* sr)
 {
+	fprintf(stderr, "%s\n", "Initializes nat");
 	/* REQUIRES */
 	assert(sr);
 
+
 	/* Initialize cache and cache cleanup thread */
 	sr_arpcache_init(&(sr->cache));
+	fprintf(stderr, "NAT Active is : %d\n", sr->nat_active);
 	if(sr->nat_active){
+		fprintf(stderr, "%s\n", "Initialized nat");
 		sr_nat_init(&(sr->nat));
-		sr->nat.ext_if = sr_get_interface(sr, "eth2");
-		sr->nat.int_if =sr_get_interface(sr, "eth1"); 
+		
+		sr->nat.sr = sr;
 	}
 
 	pthread_attr_init(&(sr->attr));
@@ -209,13 +200,18 @@ void sr_handlepacket(struct sr_instance* sr,
 
 
 		unsigned int tcp_len = len - sizeof(sr_ethernet_hdr_t);
-		int bad_packet = transform_packet(sr, (uint8_t *)ip_header, tcp_len);
 
-		if(bad_packet != PACKET_FINE){
-			printf("Bad Packet\n");
-			return;
+		if(sr->nat_active){
+			sr->nat.ext_if = sr_get_interface(sr, "eth2");
+			sr->nat.int_if =sr_get_interface(sr, "eth1"); 
+			
+			int bad_packet = transform_packet(sr, (uint8_t *)ip_header, tcp_len);
+
+			if(bad_packet != PACKET_FINE){
+				printf("Bad Packet\n");
+				return;
+			}
 		}
-
 		struct sr_if* target_interface = sr_get_interface(sr, interface);
 
 		/*checksum*/
@@ -230,6 +226,7 @@ void sr_handlepacket(struct sr_instance* sr,
 		if (ip_header->ip_hl < 5 || packet_cksum != calculated_cksum || ip_header->ip_v != BYTE_CONVERSION) {
 			return;
 		}
+
 
 		/*TTL Check*/
 		if (ip_header->ip_ttl == 0) {
@@ -286,8 +283,9 @@ void sr_handlepacket(struct sr_instance* sr,
 				packet_len = sizeof(sr_ethernet_hdr_t) + ntohs(ip_header->ip_len);
 				reply_packet = malloc(packet_len);
 				
-				gateway = sr_get_routing_entry(sr, ip_header->ip_src, ethernet_interface);
+				gateway = sr_get_routing_entry(sr, ip_header->ip_src, NULL);
 				if (gateway == NULL){
+					fprintf(stderr, "Gateway is null\n");
 					return;
 				}
 
@@ -308,9 +306,12 @@ void sr_handlepacket(struct sr_instance* sr,
 
 				arp_entry = sr_arpcache_lookup(&sr->cache, gateway->gw.s_addr);
 				if(arp_entry != NULL){
+					printf("Packet ready to be sent\n");
 					create_ethernet_header(reply_packet, arp_entry->mac, ethernet_header->ether_dhost,  ethertype_ip);
 					sr_send_packet(sr, reply_packet, packet_len, interface);
 				}else{
+					printf("Packet is waiting to be sent\n");
+
 					create_ethernet_header(reply_packet, (uint8_t *) (EMPTY_MAC),  ethernet_header->ether_dhost,  ethertype_ip);
 					struct sr_arpreq *created_req = sr_arpcache_queuereq(&sr->cache, gateway->gw.s_addr, reply_packet, packet_len, interface);
 					handle_arpreq(sr, created_req);
@@ -318,7 +319,7 @@ void sr_handlepacket(struct sr_instance* sr,
 
 			}else{
 				
-				gateway = sr_get_routing_entry(sr, ip_header->ip_src, ethernet_interface);
+				gateway = sr_get_routing_entry(sr, ip_header->ip_src, NULL);
 				if(gateway == NULL){
 					return;
 				}
@@ -405,8 +406,8 @@ void sr_handlepacket(struct sr_instance* sr,
 					handle_arpreq(sr, created_req);
 				}
 				return;
-
 			}else{
+
 				struct sr_if* next_hop_interface = sr_get_interface(sr, target_machine_ip->interface);
 				arp_entry = sr_arpcache_lookup(&sr->cache, target_machine_ip->gw.s_addr);
 				/*struct sr_rt* gateway = sr_get_routing_entry(sr, ip_header->ip_src, ethernet_interface);*/
@@ -418,6 +419,11 @@ void sr_handlepacket(struct sr_instance* sr,
 				ip_header->ip_sum = cksum((void *) ip_header, ip_header->ip_hl * BYTE_CONVERSION);
 
 				memcpy(packet_new + sizeof(sr_ethernet_hdr_t), ip_header, ntohs(ip_header->ip_len));
+				fprintf(stderr, "IP Source Header ");
+				print_addr_ip_normal(ip_header->ip_src);
+
+				fprintf(stderr, "IP Destination Header ");
+				print_addr_ip_normal(ip_header->ip_dst);
 
 				if (arp_entry != NULL) {
 					create_ethernet_header(packet_new, arp_entry->mac, next_hop_interface->addr, ethertype_ip);
@@ -435,9 +441,6 @@ void sr_handlepacket(struct sr_instance* sr,
 		}
 	}
 }
-
-
-
 
 
 

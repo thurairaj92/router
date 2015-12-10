@@ -60,7 +60,8 @@ int sr_nat_init(struct sr_nat *nat) { /* Initializes the nat */
 
   nat->mappings = NULL;
   nat->unsolicited_tcp = NULL;
-  nat->available_port = 1024;
+  fprintf(stderr, "%s\n", "Initializes unsolicited_tcp");
+  nat->available_port = 1050;
   /* Initialize any variables here */
 
   return success;
@@ -78,7 +79,7 @@ interface_map determine_ip_interface(struct sr_instance *sr, uint32_t ip_val){
 
 	struct sr_rt* nat_rt  = sr_get_routing_entry(sr, ip_val, NULL);
 	if(nat_rt){
-		if((strcmp(nat_rt->interface,"eth2") == 0) || (strcmp(nat_rt->interface,"eth3") == 0)){
+		if((strcmp(nat_rt->interface,"eth2") == 0)){
 			return external_if;
 		} else{
 			return internal_if;
@@ -145,12 +146,15 @@ void nat_mapping_timeout(void *nat_ptr){
 
     struct sr_nat_mapping *mapping_list = nat_instance->mappings;
 
-    struct sr_nat_mapping *to_free = NULL:
+    struct sr_nat_mapping *to_free = NULL;
     while(mapping_list != NULL){
       double time_diff = difftime(present,mapping_list->last_updated);
 
       if(mapping_list->type == nat_mapping_icmp){
-        if(time_diff >= ICMP_TIMEOUT){
+        if(time_diff >= nat_instance->icmp_timeout){
+            fprintf(stderr, "%s\n", "##############################################");
+        	fprintf(stderr, "%s : %d\n ", "ICMP Timeout", nat_instance->icmp_timeout);
+           	fprintf(stderr, "%s\n", "##############################################");
           if(mapping_list->next){
             mapping_list->next->prev = mapping_list->prev;
           }
@@ -167,6 +171,7 @@ void nat_mapping_timeout(void *nat_ptr){
         struct sr_nat_connection *conns = mapping_list->conns;
         while(conns != NULL){
           int connection_type = 0;
+          /*Should it be fin_ack?*/
           if(conns->server_fin && conns->client_fin){
              connection_type = 1;
           }
@@ -174,17 +179,29 @@ void nat_mapping_timeout(void *nat_ptr){
           double time_diff = difftime(present,conns->last_updated);
           int connection_remove = 0;
 
+          fprintf(stderr, "Time diff %.f\n", time_diff);
+
+          if(time_diff > 1){
+          	fprintf(stderr, "%s\n", "fprintf is fucked up\n" );
+          }
+
           if(connection_type == 0){
             if(time_diff > TCP_TRANSITION_TIMEOUT){
+            	fprintf(stderr, "%s\n", "##############################################");
+            	fprintf(stderr, "%s\n", "TCP Transition");
+            	fprintf(stderr, "%s\n", "##############################################");
               connection_remove = 1;
             }
           } else {
             if(time_diff > TCP_DEFAULT_TIMEOUT){
+            	fprintf(stderr, "%s\n", "##############################################");
+            	fprintf(stderr, "%s\n", "TCP Timeout");
+            	fprintf(stderr, "%s\n", "##############################################");
               connection_remove = 1;
             }
           }
 
-          struct sr_nat_connection *to_free = NULL:
+          struct sr_nat_connection *to_free = NULL;
           if(connection_remove){
               if(conns->next){
                 conns->next->prev = conns->prev;
@@ -264,15 +281,50 @@ int transform_inbound_packet(struct sr_instance *sr, uint8_t *packet, unsigned i
 	if(!packet_mapping){
 		if(ip_header->ip_p == ip_protocol_icmp){
 			fprintf(stderr, "%s\n", "Drop Packet 2");
-		    return DROP_PACKET; 
+		    return PACKET_FINE; 
 		} 
 
 		else if(ip_header->ip_p == ip_protocol_tcp){
 		    sr_tcp_hdr_t *tcp_hdr = (sr_tcp_hdr_t *)(packet + sizeof(sr_ip_hdr_t));
 		    /*Check its SYN*/
 		    if(tcp_hdr->flags & TCP_SYN_FLAG){
+		    	fprintf(stderr, "Port number : %d\n", tcp_hdr->dst_port);
+		    	/*if(tcp_hdr->dst_port < 1024){
+		    		struct sr_if* ethernet_interface = sr->nat.ext_if;
+			        struct sr_rt* gateway;
+					struct sr_arpentry *arp_entry;
+					uint8_t *reply_packet;
+					unsigned int packet_len;
+
+			      	gateway = sr_get_routing_entry(sr, ip_header->ip_src, NULL);
+					if(gateway == NULL){
+						return DROP_PACKET;
+					}
+					
+					arp_entry = sr_arpcache_lookup(&(sr->cache), gateway->gw.s_addr);
+
+					uint16_t  ip_len = sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_t3_hdr_t);
+					packet_len = sizeof(sr_ethernet_hdr_t) + ip_len;
+
+					reply_packet = malloc(packet_len);
+					create_icmp_port_header(reply_packet, ip_header);
+					create_ip_header(reply_packet, ip_len, 100, ip_protocol_icmp, ethernet_interface->ip , ip_header->ip_src);
+
+					if(arp_entry != NULL){
+						create_ethernet_header(reply_packet, arp_entry->mac, ethernet_interface->addr,  ethertype_ip);
+						sr_send_packet(sr, reply_packet, packet_len, "eth2");
+						return DROP_PACKET;
+					}else{
+						create_ethernet_header(reply_packet, (uint8_t *) (EMPTY_MAC),  ethernet_interface->addr,  ethertype_ip);
+						struct sr_arpreq *created_req = sr_arpcache_queuereq(&(sr->cache), gateway->gw.s_addr, reply_packet, packet_len, "eth2");
+						handle_arpreq(sr, created_req);
+						return DROP_PACKET;
+					}
+		    	}*/
+
 				struct sr_unsolicited_tcp *tcps = sr->nat.unsolicited_tcp;
 				/*Check if already in queue.*/
+				fprintf(stderr, "1 Port number : %d\n", tcp_hdr->dst_port);
 				while(tcps != NULL){
 
 					if(tcps->src_ip == ip_header->ip_src && tcps->port_val_ext == port_val){
@@ -281,12 +333,18 @@ int transform_inbound_packet(struct sr_instance *sr, uint8_t *packet, unsigned i
 					tcps = tcps->next;
 				}
 
+				fprintf(stderr, "2 Port number : %d\n", tcp_hdr->dst_port);
+
 				if(tcps == NULL){
 					/*Insert the unsolicited SYN.*/
 					struct sr_unsolicited_tcp *new_tcp = (struct sr_unsolicited_tcp *)malloc(sizeof(struct sr_unsolicited_tcp));
 					new_tcp->port_val_ext = port_val;
 					new_tcp->src_ip = ip_header->ip_src;
 					new_tcp->arrival_time = time(NULL);
+					fprintf(stderr, "4 Port number : %d\n", tcp_hdr->dst_port);
+					new_tcp->ip_header = (void *)malloc(28);
+					memcpy(new_tcp->ip_header, (void *)ip_header, 28);
+
 
 					if(sr->nat.unsolicited_tcp){
 					  sr->nat.unsolicited_tcp->prev = new_tcp;
@@ -339,6 +397,7 @@ int transform_inbound_packet(struct sr_instance *sr, uint8_t *packet, unsigned i
 int transform_outbound_packet(struct sr_instance *sr, uint8_t *packet, unsigned int len){
 
 
+
   	sr_ip_hdr_t *ip_header = (sr_ip_hdr_t*)packet;
   	printf("--------------Before---------------\n");
 
@@ -355,6 +414,10 @@ int transform_outbound_packet(struct sr_instance *sr, uint8_t *packet, unsigned 
 	int valid_protocol = 1;
 
 	if(ip_header->ip_p == ip_protocol_icmp){
+		return PACKET_FINE;
+		if (sr_get_ip_interface(sr, ip_header->ip_dst) != 0){
+			return PACKET_FINE;
+		}
 		packet_mapping_type = nat_mapping_icmp;
 		sr_icmp_nat_hdr_t *icmp_hdr = (sr_icmp_nat_hdr_t *)(packet + sizeof(sr_ip_hdr_t));
 		port_val = icmp_hdr->icmp_id;
@@ -389,7 +452,6 @@ int transform_outbound_packet(struct sr_instance *sr, uint8_t *packet, unsigned 
 
 	/*if still null return DROP_PACKET;*/
 	}
-
 	if(ip_header->ip_p == ip_protocol_tcp){
 		/*Update TCP connections HERE. */
 		/*tcp_outbound(sr, packet);*/
@@ -397,7 +459,7 @@ int transform_outbound_packet(struct sr_instance *sr, uint8_t *packet, unsigned 
 	}
 
   	/*REWRITE THE PACKET using packet mapping.*/
-	struct sr_if* src_if = sr_get_interface(sr, "eth1");
+	struct sr_if* src_if = sr_get_interface(sr, "eth2");
 
 	/*ip_header->ip_dst = packet_mapping->ip_ext;*/
 	ip_header->ip_src = src_if->ip;
@@ -432,6 +494,8 @@ int transform_outbound_packet(struct sr_instance *sr, uint8_t *packet, unsigned 
 
 
 void tcp_handling(struct sr_instance *sr, uint8_t *packet, packet_direction packet_dir){
+
+
 	struct sr_nat *nat  = &(sr->nat);
 	
 	pthread_mutex_lock(&(nat->lock));
@@ -446,7 +510,6 @@ void tcp_handling(struct sr_instance *sr, uint8_t *packet, packet_direction pack
 	struct sr_nat_mapping *packet_mapping  = NULL;
 	struct sr_nat_connection *conns_mapping = NULL;
 
-	fprintf(stderr, "sr_nat_tcp_lookup_internal called\n" );
 
 	if(packet_dir == inbound_packet){
 		server_port = tcp_hdr->src_port;
@@ -464,7 +527,7 @@ void tcp_handling(struct sr_instance *sr, uint8_t *packet, packet_direction pack
 		client_ip =  ip_header->ip_src;
 		packet_mapping = sr_nat_tcp_lookup_internal(&(sr->nat), client_ip, client_port, nat_mapping_tcp);
 	}else{
-    pthread_mutex_unlock(&(nat->lock));
+    	pthread_mutex_unlock(&(nat->lock));
 		return;
 	}
 
@@ -476,27 +539,13 @@ void tcp_handling(struct sr_instance *sr, uint8_t *packet, packet_direction pack
 		return;
 	}
 
-	struct sr_unsolicited_tcp *tcps = sr->nat.unsolicited_tcp;
+	struct sr_unsolicited_tcp *tcps = nat->unsolicited_tcp;
 	/*Check if already in queue.*/
-	fprintf(stderr, "going through unsolicited tcps\n");
 
 
-	/*while(tcps){
-		fprintf(stderr, "%s\n", "---------START------------");		
-		if(tcps){
-			fprintf(stderr, "%s\n", "not null");
-		}else{
-			fprintf(stderr, "%s\n", "this is dumb");
-		}
-		fprintf(stderr, "%ld\n", tcps->arrival_time);
-		fprintf(stderr, "time printed\n");
-		print_addr_ip_normal(tcps->src_ip);
-		fprintf(stderr, "ip printed\n");
-		fprintf(stderr, "%d\n" , tcps->port_val_ext);
-		fprintf(stderr, "port printed\n");
+	while(tcps){
 		
 		if(tcps->src_ip == server_ip && tcps->port_val_ext == server_port){
-			fprintf(stderr, "Match found\n");
 			if(tcps->prev){
 				tcps->prev->next = tcps->next;
 			}else{
@@ -512,80 +561,105 @@ void tcp_handling(struct sr_instance *sr, uint8_t *packet, packet_direction pack
 		tcps = tcps->next;
 		fprintf(stderr, "%s\n", "----------------------");
 	}
-	*/
 
-	fprintf(stderr, "sr_nat_lookup_connection called\n");
 	conns_mapping = sr_nat_lookup_connection(packet_mapping,  server_ip, server_port);
 	
-	if(conns_mapping){
-		fprintf(stderr, "%s\n", "really? how does that make sense");
-	}else{
-		fprintf(stderr, "%s\n", "Ok then problem is somewhere elese");
-	}
 
 	if(!conns_mapping){
-		fprintf(stderr, "%s\n", "New connections");
 		struct sr_nat_connection *new_conns = (struct sr_nat_connection *)malloc(sizeof(struct sr_nat_connection));
+		
 		new_conns->server_syn = 0;
 		new_conns->client_syn = 0;
 
 		new_conns->server_fin = 0;
 		new_conns->client_fin = 0;
 
-		new_conns->syn_ack = 0;
-		new_conns->fin_ack = 0;
+		new_conns->server_fins_ack = 0;
+		new_conns->client_fins_ack = 0;
 
-		new_conns->fin_ack_seq = -1;
-		new_conns->fin_last_ack = -1;
+		new_conns->server_fin_ack = 0;
+		new_conns->client_fin_ack = 0;
+
+		new_conns->client_fin_set = 0;
+		new_conns->server_fin_set = 0;
 
 		new_conns->prev = NULL;
 	  	new_conns->next = NULL;
+
 
 	  	new_conns->server_ip = server_ip;
 	  	new_conns->server_port = server_port;
 
 	  	if(packet_mapping->conns){
-	  		fprintf(stderr, "%s\n", "Conns is not emplty");
 	  		packet_mapping->conns->prev = new_conns;
 	  		new_conns->next = packet_mapping->conns;
 	  		packet_mapping->conns = new_conns;
 	  	}else{
-	  		fprintf(stderr, "%s\n", "Conns are emplty");
 	  		packet_mapping->conns = new_conns;
-	  		fprintf(stderr, "%s\n", "Conns no longer emplty");
 	  	}
 	  	conns_mapping = new_conns;
 	}
 
-	fprintf(stderr, "%s\n", "TCP flags");
-	if(tcp_hdr->flags & TCP_SYN_FLAG){
-		if(packet_dir == inbound_packet){
-			conns_mapping->server_syn = 1;
-		}else if(packet_dir == outbound_packet){
-			conns_mapping->client_syn = 1;
-		}
-	}
-	else if(tcp_hdr->flags & TCP_FIN_FLAG){
-		if(packet_dir == inbound_packet){
-			conns_mapping->server_fin = 1;
-		}else if(packet_dir == outbound_packet){
-			conns_mapping->client_fin = 1;
+	 conns_mapping->last_updated = time(NULL);
+	 fprintf(stderr, "---SEQ------%lu\n", (unsigned long)tcp_hdr->seq);
+	 fprintf(stderr, "----ACK-----%lu\n", (unsigned long)tcp_hdr->ack);
+	
+	if(packet_dir == inbound_packet){
+		fprintf(stderr, "%s\n", "INBOUND");
+		if(tcp_hdr->flags &  TCP_SYN_FLAG){
+			fprintf(stderr, "%s\n", "SYN");
+			conns_mapping->server_syn = tcp_hdr->seq;
 		}
 
-		if(tcp_hdr->flags & TCP_ACK_FLAG){
-			new_conns->fin_ack_seq = tcp_hdr->seq;
+		if(tcp_hdr->flags &  TCP_FIN_FLAG){
+			fprintf(stderr, "%s\n", "FIN");
+			conns_mapping->server_fin = tcp_hdr->seq;
+			conns_mapping->server_fins_ack = tcp_hdr->ack;
+			conns_mapping->server_fin_set = 1;
+		}
+
+		if(conns_mapping->client_fin_set > 0){
+			if(tcp_hdr->seq >= conns_mapping->client_fins_ack){
+				conns_mapping->server_fin_ack = 1;
+			}
+		}
+	}else{
+		if(tcp_hdr->flags &  TCP_SYN_FLAG){
+			conns_mapping->client_syn = tcp_hdr->seq;
+		}
+
+		if(tcp_hdr->flags &  TCP_FIN_FLAG){
+			conns_mapping->client_fin = tcp_hdr->seq;
+			conns_mapping->client_fins_ack = tcp_hdr->ack;
+			conns_mapping->client_fin_set = 1;
+		}
+
+		if(conns_mapping->server_fin_set > 0 ){
+			if(tcp_hdr->seq >= conns_mapping->server_fins_ack){
+				conns_mapping->client_fin_ack = 1;
+			}
 		}
 	}
-
 	print_connection(conns_mapping); 
 
-	fprintf(stderr, "%s\n", "check fin acknowledgement");
-	if(conns_mapping->server_fin + conns_mapping->client_fin > 1){
-		fprintf(stderr, "%s\n", "fin acknowledged?? how?");
+	if((conns_mapping->client_fin_ack > 0 && conns_mapping->server_fin_ack > 0 )|| tcp_hdr->flags == TCP_RESET_FLAG){
+		
 		if(conns_mapping->prev){
 			conns_mapping->prev->next = conns_mapping->next;	
 		}else{
 			packet_mapping->conns = conns_mapping->next;
+			if(!packet_mapping->conns){
+				fprintf(stderr, "Mapping is removed !!!!!!!\n");
+				if(packet_mapping->next){
+	        	    packet_mapping->next->prev = packet_mapping->prev;
+				}
+
+				if(packet_mapping->prev){
+					packet_mapping->prev->next = packet_mapping->next;
+				} else{
+					nat->mappings = packet_mapping->next;
+				}	
+			}
 		}
 
 		if(conns_mapping->next){
@@ -602,6 +676,36 @@ void tcp_handling(struct sr_instance *sr, uint8_t *packet, packet_direction pack
 
 int transform_packet(struct sr_instance *sr, uint8_t *packet, unsigned int len){
 	packet_direction packet_dir =  calclate_packet_direction(sr,packet);
+
+	sr_ip_hdr_t* ip_header = (sr_ip_hdr_t *)packet;
+	uint16_t packet_cksum, calculated_cksum;
+		
+	packet_cksum = ip_header->ip_sum;
+	ip_header->ip_sum = 0;
+
+	calculated_cksum =  cksum((void *) ip_header, ip_header->ip_hl * BYTE_CONVERSION);
+	ip_header->ip_sum = packet_cksum;
+
+	if (ip_header->ip_hl < 5 || packet_cksum != calculated_cksum || ip_header->ip_v != BYTE_CONVERSION) {
+		return DROP_PACKET;
+	}
+
+
+
+	if(ip_header->ip_p == 1){
+		sr_icmp_nat_hdr_t *icmp_nat_hdr = (sr_icmp_nat_hdr_t *)(packet + sizeof(sr_ip_hdr_t));
+				
+		uint16_t icmp_packet_cksum, icmp_calculate_cksum;
+		uint16_t icmp_len = ntohs(ip_header->ip_len) - ip_header->ip_hl * BYTE_CONVERSION;
+
+		icmp_packet_cksum = icmp_nat_hdr->icmp_sum;
+		icmp_nat_hdr->icmp_sum = 0;
+		icmp_calculate_cksum =  cksum((void *) icmp_nat_hdr, icmp_len);
+
+		if(icmp_packet_cksum != icmp_calculate_cksum){
+			return DROP_PACKET;
+		}
+	}
 
 
 	if(packet_dir == inbound_packet){
@@ -629,27 +733,57 @@ void *sr_nat_timeout(void *nat_ptr) {  /* Periodic Timout handling */
     nat_mapping_timeout(nat_ptr);
     time_t present = time(NULL);
 
-    //*Add Unsolicited Timeout.
+    /*Add Unsolicited Timeout.*/
     struct sr_unsolicited_tcp *unsolicited_tcp = nat->unsolicited_tcp;
     while(unsolicited_tcp != NULL){
-      double time_diff = difftime(present,unsolicited_tcp->arrival_time)
+      double time_diff = difftime(present,unsolicited_tcp->arrival_time);
       struct sr_unsolicited_tcp *to_free = NULL;
 
       if(time_diff > 6){
-        //Send ICMP error.
+      	fprintf(stderr, "ICMP 3\n");
+        /*Send ICMP error. (how to get interface?)*/
+       /* if(unsolicited_tcp->port_val_ext > 1024){*/
+	        struct sr_if* ethernet_interface = nat->ext_if;
+	        struct sr_rt* gateway;
+			struct sr_arpentry *arp_entry;
+			uint8_t *reply_packet;
+			unsigned int packet_len;
 
+	      	gateway = sr_get_routing_entry(nat->sr, unsolicited_tcp->src_ip, NULL);
+			if(gateway == NULL){
+				return NULL;
+			}
+			
+			arp_entry = sr_arpcache_lookup(&(nat->sr->cache), gateway->gw.s_addr);
 
+			uint16_t  ip_len = sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_t3_hdr_t);
+			packet_len = sizeof(sr_ethernet_hdr_t) + ip_len;
 
+			reply_packet = malloc(packet_len);
+			create_icmp_port_header(reply_packet, (sr_ip_hdr_t *)unsolicited_tcp->ip_header);
+			create_ip_header(reply_packet, ip_len, 100, ip_protocol_icmp, ethernet_interface->ip , unsolicited_tcp->src_ip);
 
-
+			if(arp_entry != NULL){
+				create_ethernet_header(reply_packet, arp_entry->mac, ethernet_interface->addr,  ethertype_ip);
+				sr_send_packet(nat->sr, reply_packet, packet_len, "eth2");
+			}else{
+				create_ethernet_header(reply_packet, (uint8_t *) (EMPTY_MAC),  ethernet_interface->addr,  ethertype_ip);
+				struct sr_arpreq *created_req = sr_arpcache_queuereq(&(nat->sr->cache), gateway->gw.s_addr, reply_packet, packet_len, "eth2");
+				handle_arpreq(nat->sr, created_req);
+			}
+		/*}*/
         
+        
+
+
          if(unsolicited_tcp->next){
             unsolicited_tcp->next->prev = unsolicited_tcp->prev;
           }
           if(unsolicited_tcp->prev){
             unsolicited_tcp->prev->next = unsolicited_tcp->next;
           } else{
-            unsolicited_tcp->conns = unsolicited_tcp->next;
+            /*corr : unsolicited_tcp->conns = unsolicited_tcp->next;*/
+          	nat->unsolicited_tcp = unsolicited_tcp->next;
           }
           to_free = unsolicited_tcp;
 
@@ -684,11 +818,15 @@ void print_mapping(struct sr_nat_mapping *map){
 void print_connection(struct sr_nat_connection *conns_mapping){
 	fprintf(stderr, "%s\n", " -- Connection Overview --");
 
-	fprintf(stderr, "%s %d\n" ,"SYN from server",conns_mapping->server_syn);
-	fprintf(stderr, "%s %d\n" ,"SYN from client",conns_mapping->client_syn);
+	fprintf(stderr, "%s %lu\n" ,"SYN from server",(unsigned long)conns_mapping->server_syn);
+	fprintf(stderr, "%s %lu\n" ,"SYN from client",(unsigned long)conns_mapping->client_syn);
 
-	fprintf(stderr, "%s %d\n" ,"FIN from server",conns_mapping->server_fin);
-	fprintf(stderr, "%s %d\n" ,"FIN from client",conns_mapping->client_fin);
+	fprintf(stderr, "%s %lu\n" ,"FIN from server",(unsigned long)conns_mapping->server_fin);
+	fprintf(stderr, "%s %lu\n" ,"FIN from client",(unsigned long)conns_mapping->client_fin);
+
+	fprintf(stderr, "%s %lu\n" ,"FIN ACK from server",(unsigned long)conns_mapping->server_fin_ack);
+	fprintf(stderr, "%s %lu\n" ,"FIN ACK from client",(unsigned long)conns_mapping->client_fin_ack);
+
 
 
 	fprintf(stderr, "%s\n", " -- End Connection Overview --");
@@ -699,7 +837,6 @@ void print_connection(struct sr_nat_connection *conns_mapping){
 struct sr_nat_mapping *sr_nat_lookup_external(struct sr_nat *nat,
    uint16_t aux_ext, sr_nat_mapping_type type ) {
 
-	fprintf(stderr, "Port from Server : %u\n", (unsigned int)aux_ext);
 
 
 	pthread_mutex_lock(&(nat->lock));
@@ -708,7 +845,7 @@ struct sr_nat_mapping *sr_nat_lookup_external(struct sr_nat *nat,
 	struct sr_nat_mapping *copy = NULL;
 	struct sr_nat_mapping *mappings = nat->mappings;
 	while(mappings != NULL){
-	if(mappings->aux_ext == aux_ext){
+	if(mappings->aux_ext == aux_ext && mappings->type == type){
 	  mappings->last_updated = time(NULL);
 	  copy = (struct sr_nat_mapping *) malloc(sizeof(struct sr_nat_mapping));
 	  memcpy(copy,mappings,sizeof(struct sr_nat_mapping));
@@ -728,8 +865,7 @@ struct sr_nat_mapping *sr_nat_tcp_lookup_external(struct sr_nat *nat,
   /* handle lookup here, malloc and assign to copy */
 	struct sr_nat_mapping *mappings = nat->mappings;
 	while(mappings != NULL){
-		if(mappings->aux_ext == aux_ext){
-		  //mappings->last_updated = time(NULL);
+		if(mappings->aux_ext == aux_ext && mappings->type == type){
 		  break;
 		}
 		mappings = mappings->next;
@@ -767,7 +903,7 @@ struct sr_nat_mapping *sr_nat_lookup_internal(struct sr_nat *nat,
   struct sr_nat_mapping *copy = NULL;
   struct sr_nat_mapping *mappings = nat->mappings;
   while(mappings != NULL){
-    if(mappings->ip_int == ip_int && mappings->aux_int == aux_int){
+    if(mappings->ip_int == ip_int && mappings->aux_int == aux_int && mappings->type == type){
       mappings->last_updated = time(NULL);
       copy = (struct sr_nat_mapping *) malloc(sizeof(struct sr_nat_mapping));
       memcpy(copy,mappings,sizeof(struct sr_nat_mapping));
@@ -780,16 +916,14 @@ struct sr_nat_mapping *sr_nat_lookup_internal(struct sr_nat *nat,
   return copy;
 }
 
+
 struct sr_nat_mapping *sr_nat_tcp_lookup_internal(struct sr_nat *nat,
   uint32_t ip_int, uint16_t aux_int, sr_nat_mapping_type type ) {
 
   /* handle lookup here, malloc and assign to copy. */
   	struct sr_nat_mapping *mappings = nat->mappings;
 	while(mappings != NULL){
-		fprintf(stderr, "Mapping\n");
-		if(mappings->ip_int == ip_int && mappings->aux_int == aux_int && mappings->type){
-			fprintf(stderr, "Mapping found\n");
-			//mappings->last_updated = time(NULL);
+		if(mappings->ip_int == ip_int && mappings->aux_int == aux_int && mappings->type == type){
 			return mappings;
 		}
 		mappings = mappings->next;
@@ -803,8 +937,10 @@ struct sr_nat_mapping *sr_nat_tcp_lookup_internal(struct sr_nat *nat,
    Actually returns a copy to the new mapping, for thread safety.
  */
 struct sr_nat_mapping *sr_nat_insert_mapping(struct sr_nat *nat, uint32_t ip_int, uint32_t ip_ext, uint16_t aux_int, sr_nat_mapping_type type ) {
-	fprintf(stderr, "Insert Mapping\n");
 	pthread_mutex_lock(&(nat->lock));
+
+
+	fprintf(stderr, "%s %d\n", "Inserting mapping : " , type);
 
 	struct sr_if* ext_if = nat->ext_if;
 	/* handle insert here, create a mapping, and then return a copy of it */
@@ -814,15 +950,16 @@ struct sr_nat_mapping *sr_nat_insert_mapping(struct sr_nat *nat, uint32_t ip_int
 	mapping->aux_int = aux_int;
 	mapping->aux_ext = htons(nat->available_port);
 	mapping->ip_int = ip_int;
+
 	mapping->ip_ext = ext_if->ip;
-	/*mapping->ip_ext = ip_ext;*/
 	mapping->last_updated = time(NULL);
 	mapping->type = type;
 	mapping->conns = NULL;
 
+
 	nat->available_port = (nat->available_port + 1)%65535;
-	if(nat->available_port < 1024){
-	nat->available_port = 1024;
+	if(nat->available_port < 1050){
+	nat->available_port = 1050;
 	}
 
 	if(nat->mappings){

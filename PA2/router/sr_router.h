@@ -25,6 +25,10 @@
 #define INIT_TTL 255
 #define PACKET_DUMP_SIZE 1024
 
+#define IP_ADDR_LEN 4
+#define INITIAL_TTL 64
+#define EMPTY_MAC "\xff\xff\xff\xff\xff\xff"
+
 /* forward declare */
 struct sr_if;
 struct sr_rt;
@@ -55,5 +59,17 @@ void sr_add_interface(struct sr_instance* , const char* );
 void sr_set_ether_ip(struct sr_instance* , uint32_t );
 void sr_set_ether_addr(struct sr_instance* , const unsigned char* );
 void sr_print_if_list(struct sr_instance* );
+
+
+void create_arp_header(uint8_t *packet, uint8_t *in_sha, uint8_t *out_sha, uint32_t in_ip, uint32_t out_ip, uint16_t op_code);
+void create_ethernet_header(uint8_t *packet, uint8_t *out_host, uint8_t *in_host, uint16_t eth_type);
+void create_ip_header(uint8_t *packet, uint16_t ip_len, uint8_t ip_ttl, uint8_t ip_p, uint32_t ip_src, uint32_t ip_dst);
+uint8_t *create_icmp_header(uint8_t icmp_type, uint8_t icmp_code, sr_ethernet_hdr_t *ethernet_header, sr_ip_hdr_t *ip_header, struct sr_if* target_interface, 
+	struct sr_arpentry *arp_entry);
+void send_arp_request(struct sr_instance *sr, struct sr_rt *hop_entry, struct sr_if *out_interface);
+void create_icmp_11_header(uint8_t *packet, sr_ip_hdr_t *old_ip);
+void create_icmp_port_header(uint8_t *packet, sr_ip_hdr_t *old_ip);
+void create_icmp_net_header(uint8_t *packet, sr_ip_hdr_t *old_ip);
+void create_icmp_host_header(uint8_t *packet, sr_ip_hdr_t *old_ip);
 
 #endif /* SR_ROUTER_H */
